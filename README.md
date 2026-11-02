@@ -100,8 +100,10 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 ## Release
 
 Pushing a tag such as `v0.1.0` runs the [build workflow](.github/workflows/build.yml), which
-publishes a GitHub release with `karoo-statusbar-temp.apk` and a `manifest.json`. The Karoo uses
-that manifest to offer updates.
+publishes a GitHub release with `karoo-statusbar-temp.apk` and a `manifest.json`. You can also
+start the workflow manually under **Actions → Build → Run workflow**, enter a new tag in
+*release_tag*, and it creates that tag at the selected branch's head. The Karoo uses the manifest
+to offer updates, and the release's APK link is what you share to the Companion app.
 
 Add the repository secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` to
 sign releases with your own key. Without them, releases are signed with a throwaway debug key, and
