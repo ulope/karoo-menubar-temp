@@ -20,7 +20,7 @@ android {
         versionName = System.getenv("RELEASE_VERSION")?.takeIf { it.isNotBlank() }?.removePrefix("v") ?: "0.1.0"
 
         // Lets the Karoo check for updates (see the release workflow, which publishes manifest.json).
-        val repository = System.getenv("GITHUB_REPOSITORY") ?: "ulope/karoo-menubar-temp"
+        val repository = System.getenv("GITHUB_REPOSITORY") ?: "ulope/karoo-statusbar-temp"
         manifestPlaceholders["karooManifestUrl"] =
             "https://github.com/$repository/releases/latest/download/manifest.json"
     }

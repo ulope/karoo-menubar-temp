@@ -43,19 +43,27 @@ jobs:
         run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease
 
       - name: Collect APK
-        run: cp app/build/outputs/apk/release/app-release.apk karoo-statusbar-temp.apk
+        run: |
+          # Releases: karoo-statusbar-temp-0.1.3.apk; other builds: karoo-statusbar-temp-build42.apk
+          if [ -n "$RELEASE_VERSION" ]; then
+            name="karoo-statusbar-temp-${RELEASE_VERSION#v}.apk"
+          else
+            name="karoo-statusbar-temp-build${BUILD_NUMBER}.apk"
+          fi
+          cp app/build/outputs/apk/release/app-release.apk "$name"
+          echo "APK_NAME=$name" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
           name: karoo-statusbar-temp
-          path: karoo-statusbar-temp.apk
+          path: ${{ env.APK_NAME }}
 
       - name: Write Karoo app manifest
         if: env.RELEASE_VERSION != ''
         run: |
-          base="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download"
+          # The APK name changes with every version, so link to this release's file.
           jq -n \
-            --arg apk "$base/karoo-statusbar-temp.apk" \
+            --arg apk "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_VERSION}/${APK_NAME}" \
             --arg version "${RELEASE_VERSION#v}" \
             --argjson code "$BUILD_NUMBER" \
             --arg developer "github.com/${GITHUB_REPOSITORY_OWNER}" \
@@ -78,5 +86,5 @@ jobs:
           tag_name: ${{ env.RELEASE_VERSION }}
           target_commitish: ${{ github.sha }}
           files: |
-            karoo-statusbar-temp.apk
+            ${{ env.APK_NAME }}
             manifest.json
