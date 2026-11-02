@@ -83,4 +83,40 @@ class StatusRowDetectorTest {
         val handle = RowLeaf(Box(200, 4, 280, 12), label = null, isContent = false)
         assertEquals(handle, StatusRowDetector.findObstruction(leaves + handle, anchors, Box(210, 0, 250, 50), screenWidth))
     }
+
+    @Test
+    fun `nothing on top of the status row on the normal ride screen`() {
+        // Karoo 3 diagnostics: five transparent full-window containers on top of the status row,
+        // holding the button hints and a radar icon elsewhere.
+        val above = listOf(
+            LayerNode(window, label = null, isContent = false, hasVisibleChildren = true),
+            LayerNode(window, label = null, isContent = false, hasVisibleChildren = false),
+            LayerNode(Box(0, 0, 38, 38), label = null, isContent = true, hasVisibleChildren = false),
+            LayerNode(Box(0, 740, 60, 800), label = "keyButtons_LAP", isContent = true, hasVisibleChildren = false),
+        )
+        assertNull(StatusRowDetector.findCover(above, temperature, window))
+        // An empty strip across the top, such as a shadow, doesn't hide it either.
+        val strip = LayerNode(Box(0, 0, 480, 60), label = null, isContent = false, hasVisibleChildren = false)
+        assertNull(StatusRowDetector.findCover(above + strip, temperature, window))
+    }
+
+    @Test
+    fun `a panel drawn over the status row covers it`() {
+        val container = LayerNode(window, label = null, isContent = false, hasVisibleChildren = true)
+        // A full-width sheet that isn't window-sized, or its header.
+        val sheet = LayerNode(Box(0, 0, 480, 760), label = null, isContent = false, hasVisibleChildren = true)
+        assertEquals(sheet, StatusRowDetector.findCover(listOf(container, sheet), temperature, window))
+        // A dialog or a card narrower than the window.
+        val card = LayerNode(Box(60, 8, 420, 300), label = null, isContent = false, hasVisibleChildren = false)
+        assertEquals(card, StatusRowDetector.findCover(listOf(container, card), temperature, window))
+        // Text or an icon.
+        val title = LayerNode(Box(0, 20, 480, 70), label = "Ride", isContent = true, hasVisibleChildren = false)
+        assertEquals(title, StatusRowDetector.findCover(listOf(container, title), temperature, window))
+        // Nothing where the temperature goes.
+        val low = LayerNode(Box(0, 300, 480, 760), label = "Ride", isContent = true, hasVisibleChildren = true)
+        assertNull(StatusRowDetector.findCover(listOf(container, low), temperature, window))
+    }
+
+    private val window = Box(0, 0, 480, 800)
+    private val temperature = Box(204, 9, 260, 58)
 }
