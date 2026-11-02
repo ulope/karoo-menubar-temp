@@ -15,8 +15,11 @@ object OverlayPlacement {
      */
     const val AUTO_SIZE_FACTOR = 0.78f
 
-    /** If the gap is too narrow, the text may shrink down to this fraction of its normal size. */
-    const val MIN_SHRINK = 0.6f
+    /**
+     * If the gap is too narrow, the text may shrink down to this fraction of its normal size.
+     * Shrinking further makes it hard to read on the bike, so it stays fairly high.
+     */
+    const val MIN_SHRINK = 0.85f
 
     /**
      * @param row the detected status row

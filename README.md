@@ -59,9 +59,9 @@ adb shell settings put secure enabled_accessibility_services io.github.ulope.kar
 |-------------------------|---------|---------------------------------------------------------------------------------------|
 | Show temperature        | on      | Turn the temperature on or off without disabling the accessibility service.           |
 | Show decimals           | off     | `18°C` or `18.4°C`; the decimal separator follows the device language.               |
-| Show unit (C / F)       | on      | `18°C` or `18°`.                                                                      |
+| Show unit (C / F)       | off     | `18°` or `18°C`. The top bar has little room, so the unit is off by default.          |
 | Text color              | Black   | Black matches the ride screen's light top bar.                                        |
-| Size                    | 100 %   | Relative to the battery level text.                                                   |
+| Size                    | 100 %   | Relative to the battery level text (50–200 %).                                        |
 | Horizontal / vertical position | 0 dp | Fine-tune the automatic placement.                                               |
 
 The settings screen shows a preview of the top bar and the live temperature reading.
@@ -120,6 +120,10 @@ new versions can't be installed over old ones.
   needed.
 - `KarooTemperature` streams `DataType.Type.TEMPERATURE` and the user profile's temperature unit via
   [karoo-ext](https://github.com/hammerheadnav/karoo-ext).
+
+- The text uses Roboto Condensed, the ride screen's own font. It is bundled, trimmed to digits,
+  `°`, separators and `C`/`F`, because the system's condensed font alias doesn't resolve to it on
+  every Karoo. It is licensed under the [SIL Open Font License](licenses/RobotoCondensed-OFL.txt).
 
 The status-row approach follows [karoo-phonestatus](https://github.com/alifib/karoo-phonestatus).
 

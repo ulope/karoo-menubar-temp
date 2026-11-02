@@ -37,7 +37,7 @@ class StatusBarTempService : AccessibilityService() {
     private var scope: CoroutineScope? = null
     private var overlay: TemperatureOverlay? = null
     private var temperature: KarooTemperature? = null
-    private val measurePaint = statusTextPaint().apply { textSize = MEASURE_TEXT_SIZE }
+    private val measurePaint by lazy { statusTextPaint(this).apply { textSize = MEASURE_TEXT_SIZE } }
 
     private var settings = TempSettings()
     private var row: StatusRow? = null
@@ -291,8 +291,11 @@ class StatusBarTempService : AccessibilityService() {
         /** ... and are at most this tall. Data fields further down are excluded. */
         private const val MAX_ROW_HEIGHT_DP = 60
 
-        /** Minimum space kept between the temperature and the ride time / battery text. */
-        private const val GAP_DP = 6
+        /**
+         * Minimum space kept between the temperature and the ride time / battery text. The gap
+         * is narrow on a Karoo 3 (about 45px with an icon left of the ride time), so keep it tight.
+         */
+        private const val GAP_DP = 2
 
         private const val EVENT_SCAN_DELAY_MS = 100L
         private const val PERIODIC_SCAN_MS = 1000L
