@@ -141,10 +141,14 @@ class StatusBarTempService : AccessibilityService() {
         )
         val metrics = measurePaint.fontMetrics
         val widthPerPx = measurePaint.measureText(text) / MEASURE_TEXT_SIZE
+        val ink = inkBounds(text)
         val placement = OverlayPlacement.place(
             row = scan.row,
-            widthPerPx = widthPerPx,
-            ascentPerPx = -metrics.ascent / MEASURE_TEXT_SIZE,
+            text = TextMetrics(
+                inkLeft = ink.left / MEASURE_TEXT_SIZE,
+                inkRight = ink.right / MEASURE_TEXT_SIZE,
+                ascent = -metrics.ascent / MEASURE_TEXT_SIZE,
+            ),
             sizePercent = settings.sizePercent,
             gapPx = dp(GAP_DP),
             offsetXPx = dp(settings.offsetXDp),
@@ -228,7 +232,11 @@ class StatusBarTempService : AccessibilityService() {
                 val rideTimeText = anchors.rideTimeIndex?.let { textBounds(nodes[it], leaves[it].box) }
                 // The Karoo 3 ride app doesn't report character bounds for the ride time, but its
                 // node hugs the text (diagnostics: node ends at 169, last ink at ~165).
-                val rideTimeEnd = rideTime?.let { rideTimeText?.right ?: it.box.right }
+                val rideTimeBox = rideTime?.let { rideTimeText ?: it.box }
+                // Center on the visible ink: the last digit of the ride time and the first digit of
+                // the battery level have a few px of empty space inside their text bounds.
+                val rideTimeEnd = rideTimeBox?.let { it.right - inkInset(it) }
+                val batteryStart = batteryBox.left + inkInset(batteryBox)
 
                 val windowsAbove = windows
                     .filter { it.layer > window.layer && it.type != AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY }
@@ -244,10 +252,10 @@ class StatusBarTempService : AccessibilityService() {
                     .joinToString("\n") { (_, l) -> "  \"${l.label ?: if (l.isContent) "(image)" else "(empty)"}\" ${l.box}" }
                 val details = buildString {
                     append("app $pkg, screen ${metrics.widthPixels}x${metrics.heightPixels} @${metrics.density}x\n")
-                    append("battery \"${battery.label}\" node ${battery.box} text ${batteryText ?: "n/a"}\n")
+                    append("battery \"${battery.label}\" node ${battery.box} text ${batteryText ?: "n/a"} → ink starts at $batteryStart\n")
                     append(
                         if (rideTime != null) {
-                            "ride time \"${rideTime.label}\" node ${rideTime.box} text ${rideTimeText ?: "n/a"} → ends at $rideTimeEnd\n"
+                            "ride time \"${rideTime.label}\" node ${rideTime.box} text ${rideTimeText ?: "n/a"} → ink ends at $rideTimeEnd\n"
                         } else {
                             "ride time not found\n"
                         },
@@ -256,7 +264,7 @@ class StatusBarTempService : AccessibilityService() {
                 }
 
                 return Scan(
-                    row = StatusRow(leftEdge = rideTimeEnd, rightEdge = batteryBox.left, reference = batteryBox),
+                    row = StatusRow(leftEdge = rideTimeEnd, rightEdge = batteryStart, reference = batteryBox),
                     leaves = leaves,
                     anchors = anchors,
                     windowsAbove = windowsAbove,
@@ -268,6 +276,17 @@ class StatusBarTempService : AccessibilityService() {
         }
         return null
     }
+
+    /** Ink bounds of [text] in our font at [MEASURE_TEXT_SIZE], relative to the text origin. */
+    private fun inkBounds(text: String): Rect = Rect().also { measurePaint.getTextBounds(text, 0, text.length, it) }
+
+    /**
+     * Typical empty space between the edge of a native text's bounds and its ink. The ride
+     * screen's digits are close to, but not exactly, our Roboto Condensed, so this is calibrated
+     * from photos rather than measured in our font (2-4px for digits on a Karoo 3).
+     */
+    private fun inkInset(box: Box): Int =
+        (box.height / OverlayPlacement.REFERENCE_HEIGHT_PER_FONT_SIZE * NATIVE_INK_INSET).roundToInt()
 
     /** Collects visible leaf nodes near the top of the screen. */
     private fun collectTopRowLeaves(
@@ -363,5 +382,8 @@ class StatusBarTempService : AccessibilityService() {
         private const val EVENT_SCAN_DELAY_MS = 100L
         private const val PERIODIC_SCAN_MS = 1000L
         private const val MEASURE_TEXT_SIZE = 100f
+
+        /** Side bearing of the native digits, as a fraction of their font size. */
+        private const val NATIVE_INK_INSET = 0.055f
     }
 }

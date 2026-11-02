@@ -6,12 +6,13 @@ import org.junit.Test
 
 class OverlayPlacementTest {
 
-    // Battery level text bounds, 40px tall: native font size 40 / 1.12 ≈ 35.7px.
+    // Battery level text bounds, 40px tall.
     private val reference = Box(left = 280, top = 10, right = 340, bottom = 50)
     private val nativeSize = 40 / OverlayPlacement.REFERENCE_HEIGHT_PER_FONT_SIZE
     private val nativeBaseline = 10 + 40 * OverlayPlacement.BASELINE_RATIO
-    private val widthPerPx = 1.36f // "18°" in Roboto Condensed
-    private val ascentPerPx = 0.928f
+
+    // "30°" in Roboto Condensed Regular: ink from 0.049 to 1.299 em, ascent 0.928 em.
+    private val text = TextMetrics(inkLeft = 0.049f, inkRight = 1.299f, ascent = 0.928f)
 
     private fun place(
         leftEdge: Int?,
@@ -21,18 +22,19 @@ class OverlayPlacementTest {
         offsetY: Int = 0,
     ) = OverlayPlacement.place(
         row = StatusRow(leftEdge, rightEdge, reference),
-        widthPerPx = widthPerPx,
-        ascentPerPx = ascentPerPx,
+        text = text,
         sizePercent = sizePercent,
         gapPx = 4,
         offsetXPx = offsetX,
         offsetYPx = offsetY,
     )
 
-    private fun baseline(p: Placement) = p.y + p.textSizePx * ascentPerPx
+    private fun inkLeft(p: Placement) = p.x + p.textSizePx * text.inkLeft
+    private fun inkRight(p: Placement) = p.x + p.textSizePx * text.inkRight
+    private fun baseline(p: Placement) = p.y + p.textSizePx * text.ascent
 
     @Test
-    fun `100 percent matches the battery level's font size`() {
+    fun `100 percent matches the battery level's digit size`() {
         assertEquals(nativeSize, place(leftEdge = 150).textSizePx, 0.01f)
         assertEquals(nativeSize * 1.5f, place(150, sizePercent = 150).textSizePx, 0.01f)
     }
@@ -45,24 +47,24 @@ class OverlayPlacementTest {
     }
 
     @Test
-    fun `centers the text in the gap`() {
+    fun `centers the ink in the gap`() {
         val p = place(leftEdge = 150)
-        assertEquals(215f, p.x + p.textSizePx * widthPerPx / 2f, 1f)
+        assertEquals(215f, (inkLeft(p) + inkRight(p)) / 2f, 1f)
     }
 
     @Test
     fun `sits left of the battery level when there is no ride time`() {
         val p = place(leftEdge = null)
-        assertEquals(280f - 4f, p.x + p.textSizePx * widthPerPx, 1f)
+        assertEquals(280f - 4f, inkRight(p), 1f)
     }
 
     @Test
     fun `shrinks to fit a narrow gap`() {
-        // 54px gap minus 2 * 4px leaves 46px; at full size the text is ~48.6px wide.
-        val p = place(leftEdge = 226)
+        // 44px gap minus 2 * 4px leaves 36px of ink; at full size the ink is ~40.7px wide.
+        val p = place(leftEdge = 236)
         assertTrue(p.textSizePx < nativeSize)
-        assertEquals(46f, p.textSizePx * widthPerPx, 0.01f)
-        assertEquals(253f, p.x + p.textSizePx * widthPerPx / 2f, 1f)
+        assertEquals(36f, inkRight(p) - inkLeft(p), 0.5f)
+        assertEquals(258f, (inkLeft(p) + inkRight(p)) / 2f, 1f)
         assertEquals(nativeBaseline, baseline(p), 1f)
     }
 
@@ -76,14 +78,23 @@ class OverlayPlacementTest {
 
     @Test
     fun `Karoo 3 ride screen from diagnostics`() {
-        // Ride time "0:06:27" node [8,0-169,58], battery "70%" text [258,7-315,53], density 1.875.
-        val row = StatusRow(leftEdge = 169, rightEdge = 258, reference = Box(258, 7, 315, 53))
-        val p = OverlayPlacement.place(row, widthPerPx, ascentPerPx, 100, gapPx = 4, offsetXPx = 0, offsetYPx = 0)
-        assertEquals(41.1f, p.textSizePx, 0.1f)
-        val width = p.textSizePx * widthPerPx
-        // Centered between the ride time and the battery level, ~16px free on both sides.
-        assertEquals(213.5f, p.x + width / 2f, 1f)
-        assertTrue(p.x - 169 > 14 && 258 - (p.x + width) > 14)
+        // Battery "70%" text [258,7-315,53]: ink starts ~2px in. Digits ~26.5px tall.
+        val battery = Box(258, 7, 315, 53)
+        fun karoo(rideTimeInkEnd: Int) = OverlayPlacement.place(
+            StatusRow(leftEdge = rideTimeInkEnd, rightEdge = 260, reference = battery),
+            text, sizePercent = 100, gapPx = 4, offsetXPx = 0, offsetYPx = 0,
+        )
+
+        // Ride time "0:06:27" node [8,0-169,58], ink ends ~3px in.
+        val wide = karoo(rideTimeInkEnd = 166)
+        assertEquals(37.4f, wide.textSizePx, 0.1f)
+        assertEquals(26.5f, wide.textSizePx * 0.711f, 0.3f)
+        assertEquals(213f, (inkLeft(wide) + inkRight(wide)) / 2f, 1f)
+
+        // With the radar icon the ride time moves to [46,0-207,58]: still full size, ~4.5px free.
+        val narrow = karoo(rideTimeInkEnd = 204)
+        assertEquals(37.4f, narrow.textSizePx, 0.1f)
+        assertTrue(inkLeft(narrow) - 204 >= 4 && 260 - inkRight(narrow) >= 4)
     }
 
     @Test
