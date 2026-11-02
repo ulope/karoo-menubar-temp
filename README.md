@@ -3,10 +3,9 @@
 A [Hammerhead Karoo](https://www.hammerhead.io/) extension that shows the current air temperature
 in the top bar of the ride screen, between the ride time and the battery level:
 
-```
- 1:23:45        18°C        87% ▮ 10:42
- └ ride time    └ new       └ battery and clock
-```
+![The Karoo ride screen's top bar: ride time 1:24:37, temperature 18°, battery 94% and clock 10:42](docs/topbar.png)
+
+<img src="docs/screenshot.png" width="300" alt="Karoo ride screen with the temperature in the top bar, above data fields for speed, distance, power, heart rate, cadence and elevation">
 
 - **Temperature source:** Karoo's built-in *Temperature* data field. If you have paired a
   temperature sensor, Karoo uses that instead. The built-in sensor sits inside the device, so it
@@ -106,7 +105,9 @@ publishes a GitHub release with `karoo-statusbar-temp-<version>.apk` (for exampl
 `karoo-statusbar-temp-0.1.3.apk`) and a `manifest.json`. You can also
 start the workflow manually under **Actions → Build → Run workflow**, enter a new tag in
 *release_tag*, and it creates that tag at the selected branch's head. The Karoo uses the manifest
-to offer updates, and the release's APK link is what you share to the Companion app.
+to offer updates, and the release's APK link is what you share to the Companion app. The manifest
+also links `docs/icon.png` and `docs/screenshot.png`, which the Karoo shows on the extension's
+page. To change them, edit `docs/preview/*.html` and run `docs/preview/render.js`.
 
 Add the repository secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` to
 sign releases with your own key. Without them, releases are signed with a throwaway debug key, and
@@ -132,3 +133,15 @@ The status-row approach follows [karoo-phonestatus](https://github.com/alifib/ka
 
 This is an independent project, not affiliated with Hammerhead or SRAM. Karoo OS updates that
 change the ride app's layout may require adjustments.
+
+## License
+
+[MIT](LICENSE). Third-party parts keep their own licenses:
+
+- [karoo-ext](https://github.com/hammerheadnav/karoo-ext), AndroidX, Jetpack Compose, Kotlin and
+  kotlinx libraries: Apache License 2.0.
+- Roboto Condensed (bundled in the app): [SIL Open Font License 1.1](licenses/RobotoCondensed-OFL.txt).
+- The thermometer icon is based on the "thermostat" icon from
+  [Material Icons](https://github.com/google/material-design-icons): Apache License 2.0.
+- The preview images are rendered with Roboto Condensed and IBM Plex Sans Condensed (SIL Open
+  Font License 1.1); the fonts are not included in this repository.
