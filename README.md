@@ -32,6 +32,12 @@ in the top bar of the ride screen, between the ride time and the battery level:
      adb install karoo-statusbar-temp-<version>.apk
      ```
 
+### Updates
+
+Once installed, the Karoo offers new versions itself. It only checks for updates while no ride is
+recording, so an update shows up after you end or discard the current ride. You can also install a
+newer release over the old one the same way as above; your settings are kept.
+
 ## Set up (once)
 
 Karoo OS has no API that lets extensions add items to the status bar. During a ride, the top bar is
