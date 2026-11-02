@@ -20,9 +20,10 @@ object OverlayPlacement {
 
     /**
      * Height of the battery level's text bounds divided by the font size that gives our digits the
-     * same height. Measured on a Karoo 3: 46px bounds, digits ~26.5px tall (font size ~37.4px).
+     * same height. Measured on a Karoo 3: 46px bounds, round digits ("0", "5", "8") ~29px tall,
+     * like ours at 41.1px. (Digits with thin diagonals, "4" and "7", measure short in photos.)
      */
-    const val REFERENCE_HEIGHT_PER_FONT_SIZE = 1.23f
+    const val REFERENCE_HEIGHT_PER_FONT_SIZE = 1.12f
 
     /**
      * Where the battery level's baseline sits within its text bounds, as a fraction of their height

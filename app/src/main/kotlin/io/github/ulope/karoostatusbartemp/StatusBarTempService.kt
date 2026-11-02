@@ -283,7 +283,7 @@ class StatusBarTempService : AccessibilityService() {
     /**
      * Typical empty space between the edge of a native text's bounds and its ink. The ride
      * screen's digits are close to, but not exactly, our Roboto Condensed, so this is calibrated
-     * from photos rather than measured in our font (2-4px for digits on a Karoo 3).
+     * from photos rather than measured in our font (2-6px for digits on a Karoo 3).
      */
     private fun inkInset(box: Box): Int =
         (box.height / OverlayPlacement.REFERENCE_HEIGHT_PER_FONT_SIZE * NATIVE_INK_INSET).roundToInt()
@@ -374,16 +374,20 @@ class StatusBarTempService : AccessibilityService() {
         private const val MAX_ROW_HEIGHT_DP = 60
 
         /**
-         * Minimum space kept between the temperature and the ride time / battery text. The gap
-         * is narrow on a Karoo 3 (about 45px with an icon left of the ride time), so keep it tight.
+         * Minimum space kept between the temperature's ink and the ride time / battery ink. With
+         * an icon left of the ride time, the gap on a Karoo 3 is ~58px; at 1dp a full-size "30°"
+         * (~51px of ink) still fits, so the size stays the same with and without the icon.
          */
-        private const val GAP_DP = 2
+        private const val GAP_DP = 1
 
         private const val EVENT_SCAN_DELAY_MS = 100L
         private const val PERIODIC_SCAN_MS = 1000L
         private const val MEASURE_TEXT_SIZE = 100f
 
-        /** Side bearing of the native digits, as a fraction of their font size. */
-        private const val NATIVE_INK_INSET = 0.055f
+        /**
+         * Side bearing of the native digits, as a fraction of their font size. Measured on a
+         * Karoo 3: ride time 4.3-5.6px (~52px font), battery level 2-4.2px (~41px font).
+         */
+        private const val NATIVE_INK_INSET = 0.08f
     }
 }
