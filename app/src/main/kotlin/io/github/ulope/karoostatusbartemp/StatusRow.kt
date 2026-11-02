@@ -23,8 +23,8 @@ data class RowLeaf(
 /**
  * The ride screen's top status row as seen through accessibility.
  *
- * @param leftEdge where the ride time text ends. Null if no ride time is shown.
- * @param rightEdge where the battery level text starts.
+ * @param leftEdge where the ride time's ink ends. Null if no ride time is shown.
+ * @param rightEdge where the battery level's ink starts.
  * @param reference bounds of the battery level text. The temperature is sized and aligned to it.
  */
 data class StatusRow(
