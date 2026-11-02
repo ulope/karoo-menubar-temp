@@ -12,10 +12,11 @@ in the top bar of the ride screen, between the ride time and the battery level:
   temperature sensor, Karoo uses that instead. The built-in sensor sits inside the device, so it
   can read high in direct sun.
 - **Units** follow your Karoo profile (°C or °F).
-- **Only on the ride screen:** it is hidden on the launcher, in menus, in other apps, and while the
-  control center or a dialog covers the top bar.
-- **Automatic placement:** it is centered between the ride time and the battery level, follows
-  them as they change width, and shrinks slightly if the gap gets narrow (rides over 10 hours).
+- **Only on the ride screen:** it is hidden on the launcher, in menus, in other apps, and while a
+  drawer, the control center or a dialog covers the top bar.
+- **Automatic placement:** it is centered between the ride time and the battery level, in the
+  same font, size and baseline as the battery level. It follows them as they change width, and
+  shrinks slightly if the gap gets narrow (an icon left of the ride time, rides over 10 hours).
 - Works on Karoo 2 and Karoo 3.
 
 ## Install
@@ -71,8 +72,9 @@ The settings screen shows a preview of the top bar and the live temperature read
 - **Nothing appears:** check that the settings screen says the accessibility service is on and that
   *Show temperature* is enabled, then open the ride app.
 - **Shows `--°C`:** the Karoo isn't currently providing a temperature reading.
-- **Slightly off position or size:** use the sliders. The layout was derived from screenshots, not
-  measured on every Karoo model.
+- **Slightly off position or size:** use the sliders. The size and baseline were calibrated on a
+  Karoo 3. To report a placement problem, open a ride, then go to the settings screen, tap
+  **Show diagnostics**, and send a photo of it together with one of the ride screen.
 - Logs use the tag `StatusBarTemp`:
 
   ```bash
@@ -122,7 +124,7 @@ new versions can't be installed over old ones.
 - `KarooTemperature` streams `DataType.Type.TEMPERATURE` and the user profile's temperature unit via
   [karoo-ext](https://github.com/hammerheadnav/karoo-ext).
 
-- The text uses Roboto Condensed, the ride screen's own font. It is bundled, trimmed to digits,
+- The text uses Roboto Condensed Light, the ride screen's own font. It is bundled, trimmed to digits,
   `°`, separators and `C`/`F`, because the system's condensed font alias doesn't resolve to it on
   every Karoo. It is licensed under the [SIL Open Font License](licenses/RobotoCondensed-OFL.txt).
 
