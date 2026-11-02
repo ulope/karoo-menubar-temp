@@ -75,6 +75,18 @@ class OverlayPlacementTest {
     }
 
     @Test
+    fun `Karoo 3 ride screen from diagnostics`() {
+        // Ride time "0:06:27" node [8,0-169,58], battery "70%" text [258,7-315,53], density 1.875.
+        val row = StatusRow(leftEdge = 169, rightEdge = 258, reference = Box(258, 7, 315, 53))
+        val p = OverlayPlacement.place(row, widthPerPx, ascentPerPx, 100, gapPx = 4, offsetXPx = 0, offsetYPx = 0)
+        assertEquals(41.1f, p.textSizePx, 0.1f)
+        val width = p.textSizePx * widthPerPx
+        // Centered between the ride time and the battery level, ~16px free on both sides.
+        assertEquals(213.5f, p.x + width / 2f, 1f)
+        assertTrue(p.x - 169 > 14 && 258 - (p.x + width) > 14)
+    }
+
+    @Test
     fun `applies user offsets`() {
         val base = place(leftEdge = 150)
         val moved = place(leftEdge = 150, offsetX = 12, offsetY = -3)

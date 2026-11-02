@@ -20,7 +20,6 @@ import java.text.DateFormat
 import java.util.Date
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -227,7 +226,9 @@ class StatusBarTempService : AccessibilityService() {
 
                 val rideTime = anchors.rideTimeIndex?.let { leaves[it] }
                 val rideTimeText = anchors.rideTimeIndex?.let { textBounds(nodes[it], leaves[it].box) }
-                val rideTimeEnd = rideTime?.let { rideTimeText?.right ?: estimateTextEnd(it) }
+                // The Karoo 3 ride app doesn't report character bounds for the ride time, but its
+                // node hugs the text (diagnostics: node ends at 169, last ink at ~165).
+                val rideTimeEnd = rideTime?.let { rideTimeText?.right ?: it.box.right }
 
                 val windowsAbove = windows
                     .filter { it.layer > window.layer && it.type != AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY }
@@ -266,18 +267,6 @@ class StatusBarTempService : AccessibilityService() {
             }
         }
         return null
-    }
-
-    /**
-     * Where the ride time text ends when the app doesn't report character bounds: measure the
-     * text in the same font, sized like the battery level relative to its node. Only ever moves
-     * the end left of the node's edge, in case the node is wider than its text.
-     */
-    private fun estimateTextEnd(leaf: RowLeaf): Int {
-        val text = leaf.label ?: return leaf.box.right
-        val fontSize = leaf.box.height / OverlayPlacement.REFERENCE_HEIGHT_PER_FONT_SIZE
-        val width = measurePaint.measureText(text) / MEASURE_TEXT_SIZE * fontSize
-        return min(leaf.box.right, leaf.box.left + width.roundToInt())
     }
 
     /** Collects visible leaf nodes near the top of the screen. */
