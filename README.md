@@ -20,7 +20,7 @@ in the top bar of the ride screen, between the ride time and the battery level:
 
 ## Install
 
-1. Download `karoo-statusbar-temp.apk` from the [latest release](../../releases/latest).
+1. Download `karoo-statusbar-temp-<version>.apk` from the [latest release](../../releases/latest).
 2. Install it:
    - **Karoo 3:** open the release page on your phone, long-press the APK link, choose
      **Share → Hammerhead Companion**, then confirm the install on the Karoo
@@ -28,7 +28,7 @@ in the top bar of the ride screen, between the ride time and the battery level:
    - **Karoo 2:** enable USB debugging, connect it to a computer, then run:
 
      ```bash
-     adb install karoo-statusbar-temp.apk
+     adb install karoo-statusbar-temp-<version>.apk
      ```
 
 ## Set up (once)
@@ -100,7 +100,8 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 ## Release
 
 Pushing a tag such as `v0.1.0` runs the [build workflow](.github/workflows/build.yml), which
-publishes a GitHub release with `karoo-statusbar-temp.apk` and a `manifest.json`. You can also
+publishes a GitHub release with `karoo-statusbar-temp-<version>.apk` (for example
+`karoo-statusbar-temp-0.1.3.apk`) and a `manifest.json`. You can also
 start the workflow manually under **Actions → Build → Run workflow**, enter a new tag in
 *release_tag*, and it creates that tag at the selected branch's head. The Karoo uses the manifest
 to offer updates, and the release's APK link is what you share to the Companion app.
