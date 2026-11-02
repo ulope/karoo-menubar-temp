@@ -22,7 +22,7 @@ data class RowLeaf(
 
 /**
  * A visible node near the top of the screen in a layer that the ride app draws on top of its
- * status row, such as a drawer.
+ * status row, such as a panel or dialog.
  */
 data class LayerNode(
     val box: Box,
@@ -109,10 +109,9 @@ object StatusRowDetector {
      * [area], or null if nothing does.
      *
      * The Karoo 3 ride screen always has transparent containers the size of the window on top of
-     * the status row (for alerts, drawers and button hints), so those don't count. What does: text
-     * or an image, anything narrower than the window (a dialog, a drawer's handle), and a
-     * full-width node that is shorter than the window and holds something, such as a drawer pulled
-     * all the way up or its header.
+     * the status row (apparently for alerts and button hints), so those don't count. What does: text
+     * or an image, anything narrower than the window (a dialog), and a full-width node that is
+     * shorter than the window and holds something, such as a panel or its header.
      */
     fun findCover(above: List<LayerNode>, area: Box, window: Box): LayerNode? =
         above.firstOrNull { node ->

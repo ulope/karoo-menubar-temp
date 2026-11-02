@@ -11,8 +11,9 @@ in the top bar of the ride screen, between the ride time and the battery level:
   temperature sensor, Karoo uses that instead. The built-in sensor sits inside the device, so it
   can read high in direct sun.
 - **Units** follow your Karoo profile (°C or °F).
-- **Only on the ride screen:** it is hidden on the launcher, in menus, in other apps, and while a
-  drawer, the control center or a dialog covers the top bar.
+- **Only on the ride screen:** it is hidden on the launcher, in menus, in other apps, and while the
+  control center or a dialog covers the top bar. One exception: see
+  [Troubleshooting](#troubleshooting) for the bottom drawer.
 - **Automatic placement:** it is centered between the ride time and the battery level, in the
   same font, size and baseline as the battery level. It follows them as they change width, and
   shrinks slightly if the gap gets narrow (an icon left of the ride time, rides over 10 hours).
@@ -71,6 +72,10 @@ The settings screen shows a preview of the top bar and the live temperature read
 - **Nothing appears:** check that the settings screen says the accessibility service is on and that
   *Show temperature* is enabled, then open the ride app.
 - **Shows `--°C`:** the Karoo isn't currently providing a temperature reading.
+- **Stays visible over the bottom drawer:** when you pull the ride screen's bottom drawer all the
+  way up, the temperature stays on top of it. This is a known limitation. The ride app doesn't
+  expose that drawer to accessibility services, so the extension can't tell that it covers the top
+  bar.
 - **Slightly off position or size:** use the sliders. The size and baseline were calibrated on a
   Karoo 3. To report a placement problem, open a ride, then go to the settings screen, tap
   **Show diagnostics**, and send a photo of it together with one of the ride screen.
@@ -118,8 +123,8 @@ new versions can't be installed over old ones.
 - `StatusBarTempService` is the accessibility service. Every second, and whenever windows change,
   it reads the ride app's (`io.hammerhead.rideapp`) window. It picks out the short, labelled
   elements at the top of the screen, takes the end of the ride time and the start of the battery
-  level as the gap, and checks that nothing covers it: no other window, and nothing in the layers
-  the ride app draws on top of the status row (where its drawers are).
+  level as the gap, and checks that nothing covers it: no other window, and nothing the ride app
+  draws on top of the status row that is visible to accessibility.
 - The temperature is drawn in a `TYPE_ACCESSIBILITY_OVERLAY` window, which sits above everything
   and lets touches pass through. Because of this, the "display over other apps" permission isn't
   needed.

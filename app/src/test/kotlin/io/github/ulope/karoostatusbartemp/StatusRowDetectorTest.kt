@@ -101,7 +101,7 @@ class StatusRowDetectorTest {
     }
 
     @Test
-    fun `a drawer pulled over the status row covers it`() {
+    fun `a panel drawn over the status row covers it`() {
         val container = LayerNode(window, label = null, isContent = false, hasVisibleChildren = true)
         // A full-width sheet that isn't window-sized, or its header.
         val sheet = LayerNode(Box(0, 0, 480, 760), label = null, isContent = false, hasVisibleChildren = true)

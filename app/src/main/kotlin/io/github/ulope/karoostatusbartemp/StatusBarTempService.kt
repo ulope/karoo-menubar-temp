@@ -177,8 +177,8 @@ class StatusBarTempService : AccessibilityService() {
             offsetYPx = dp(settings.offsetYDp),
         )
 
-        // Hide if something else is where the text would go: a drawer pulled over the ride
-        // screen, a dialog, the control center.
+        // Hide if something else is where the text would go: the control center, a dialog, a
+        // panel the ride app draws over its screen.
         val area = Box(
             left = placement.x,
             top = placement.y,
@@ -278,8 +278,9 @@ class StatusBarTempService : AccessibilityService() {
                     .filterNot { (w, r) -> w.type == AccessibilityWindowInfo.TYPE_SYSTEM && r.height() <= maxHeightPx }
                     .map { (w, r) -> "type ${w.type} \"${w.title ?: ""}\"" to Box(r.left, r.top, r.right, r.bottom) }
 
-                // Drawers pulled over the ride screen are drawn inside the ride app's own window,
-                // in layers on top of the status row.
+                // Panels the ride app shows over its own screen are drawn in its window, in layers
+                // on top of the status row. (Its bottom drawer, pulled all the way up, isn't
+                // visible to accessibility at all: on a Karoo 3 nothing in the tree changes.)
                 val batteryNode = nodes[anchors.batteryIndex]
                 val rowContainer = rowContainer(batteryNode, anchors.rideTimeIndex?.let { nodes[it] }, obtained)
                 val layersAbove = rowContainer
