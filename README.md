@@ -124,7 +124,7 @@ new versions can't be installed over old ones.
 - `KarooTemperature` streams `DataType.Type.TEMPERATURE` and the user profile's temperature unit via
   [karoo-ext](https://github.com/hammerheadnav/karoo-ext).
 
-- The text uses Roboto Condensed Light, the ride screen's own font. It is bundled, trimmed to digits,
+- The text uses Roboto Condensed, the font of the ride screen's battery level. It is bundled, trimmed to digits,
   `°`, separators and `C`/`F`, because the system's condensed font alias doesn't resolve to it on
   every Karoo. It is licensed under the [SIL Open Font License](licenses/RobotoCondensed-OFL.txt).
 
