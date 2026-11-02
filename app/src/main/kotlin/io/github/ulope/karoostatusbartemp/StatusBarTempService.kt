@@ -41,6 +41,10 @@ class StatusBarTempService : AccessibilityService() {
         val anchors: StatusRowDetector.Anchors,
         /** Windows above the ride app that may cover the row, with a description for diagnostics. */
         val windowsAbove: List<Pair<String, Box>>,
+        /** Nodes near the top in the layers the ride app draws on top of the status row. */
+        val layersAbove: List<LayerNode>,
+        /** The ride app's window bounds. */
+        val window: Box,
         val screenWidth: Int,
         /** Details for the diagnostics screen. */
         val details: String,
@@ -183,13 +187,15 @@ class StatusBarTempService : AccessibilityService() {
         )
         val coveringWindow = scan.windowsAbove.firstOrNull { (_, bounds) -> bounds.intersects(area) }
         val obstruction = StatusRowDetector.findObstruction(scan.leaves, scan.anchors, area, scan.screenWidth)
-        if (coveringWindow != null || obstruction != null) {
-            val reason = if (coveringWindow != null) {
-                "covered by window ${coveringWindow.first} ${coveringWindow.second}"
-            } else {
-                "\"${obstruction?.label ?: "(unlabelled)"}\" ${obstruction?.box} is in the way"
+        val cover = StatusRowDetector.findCover(scan.layersAbove, area, scan.window)
+        val details = "${scan.details}\n${describeLayersOver(scan.layersAbove, area)}"
+        if (coveringWindow != null || obstruction != null || cover != null) {
+            val reason = when {
+                coveringWindow != null -> "covered by window ${coveringWindow.first} ${coveringWindow.second}"
+                obstruction != null -> "\"${obstruction.label ?: "(unlabelled)"}\" ${obstruction.box} is in the way"
+                else -> "covered by ${cover?.className} \"${cover?.label ?: ""}\" ${cover?.box} drawn on top of the status row"
             }
-            Diagnostics.record("HIDDEN: $reason\n${scan.details}")
+            Diagnostics.record("HIDDEN: $reason\n$details")
             overlay.hide()
             return
         }
@@ -197,8 +203,19 @@ class StatusBarTempService : AccessibilityService() {
         overlay.show(text, placement, settings.textColor.argb)
         Diagnostics.record(
             "SHOWN \"$text\" ${"%.1f".format(placement.textSizePx)}px at $area " +
-                "(native font ${"%.1f".format(OverlayPlacement.nativeFontSize(scan.row))}px)\n${scan.details}",
+                "(native font ${"%.1f".format(OverlayPlacement.nativeFontSize(scan.row))}px)\n$details",
         )
+    }
+
+    /** For diagnostics: what the ride app draws on top of the status row where the temperature goes. */
+    private fun describeLayersOver(layersAbove: List<LayerNode>, area: Box): String {
+        val over = layersAbove.filter { it.box.intersects(area) }
+        val lines = over.take(MAX_LAYER_LINES).joinToString("\n") { node ->
+            "  ${"·".repeat(node.depth)}${node.className} \"${node.label ?: ""}\" ${node.box}" +
+                if (node.hasVisibleChildren) " +children" else ""
+        }
+        val more = if (over.size > MAX_LAYER_LINES) "\n  … ${over.size - MAX_LAYER_LINES} more" else ""
+        return "drawn on top of the status row, over the temperature:\n${lines.ifEmpty { "  none" }}$more"
     }
 
     /**
@@ -261,6 +278,14 @@ class StatusBarTempService : AccessibilityService() {
                     .filterNot { (w, r) -> w.type == AccessibilityWindowInfo.TYPE_SYSTEM && r.height() <= maxHeightPx }
                     .map { (w, r) -> "type ${w.type} \"${w.title ?: ""}\"" to Box(r.left, r.top, r.right, r.bottom) }
 
+                // Drawers pulled over the ride screen are drawn inside the ride app's own window,
+                // in layers on top of the status row.
+                val batteryNode = nodes[anchors.batteryIndex]
+                val rowContainer = rowContainer(batteryNode, anchors.rideTimeIndex?.let { nodes[it] }, obtained)
+                val layersAbove = rowContainer
+                    ?.let { collectLayersAbove(it, bandBottom = 2 * maxHeightPx, obtained) }
+                    .orEmpty()
+
                 val metrics = resources.displayMetrics
                 val others = leaves.indices
                     .filter { it != anchors.batteryIndex && it != anchors.rideTimeIndex }
@@ -272,7 +297,7 @@ class StatusBarTempService : AccessibilityService() {
                 // The layers of the ride screen and what each contains: shows whether something
                 // like a drawer is drawn over the status row inside the ride app's own window.
                 val gap = Box(rideTimeEnd ?: (batteryStart - dp(40)), 0, batteryStart, batteryBox.bottom)
-                val layers = if (Diagnostics.verbose) describeLayers(nodes[anchors.batteryIndex], gap, obtained) else null
+                val layers = if (Diagnostics.verbose) describeLayers(batteryNode, gap, obtained) else null
                 val allWindows = describeWindows(windows)
                 val details = buildString {
                     append("app $pkg, screen ${metrics.widthPixels}x${metrics.heightPixels} @${metrics.density}x\n")
@@ -294,6 +319,8 @@ class StatusBarTempService : AccessibilityService() {
                     leaves = leaves,
                     anchors = anchors,
                     windowsAbove = windowsAbove,
+                    layersAbove = layersAbove,
+                    window = Box(windowBounds.left, windowBounds.top, windowBounds.right, windowBounds.bottom),
                     screenWidth = screenWidth,
                     details = details,
                 )
@@ -326,18 +353,22 @@ class StatusBarTempService : AccessibilityService() {
         var parent = anchor.parent?.also { obtained += it }
         var levels = 0
         while (parent != null && levels < 20) {
-            if (parent.childCount > 1) {
+            val siblings = children(parent, obtained)
+            if (siblings.size > 1) {
                 out.append("  ${parent.shortClassName()} ${parent.screenBox()}:\n")
-                for (i in 0 until parent.childCount) {
-                    val c = parent.getChild(i) ?: continue
-                    obtained += c
+                val branch = siblings.indexOf(child)
+                siblings.forEachIndexed { i, c ->
                     val stats = LayerStats()
                     stats.collect(c, gap, obtained)
-                    val marker = if (c == child) ">" else " "
+                    // ">" leads to the battery level, "^" is drawn on top of it.
+                    val above = branch >= 0 && i != branch && isDrawnAbove(c, i, child, branch)
+                    val marker = if (i == branch) ">" else if (above) "^" else " "
+                    // Labels only where they matter, so data fields changing don't add entries.
+                    val labels = if (above) stats.firstLabels.joinToString("") { " \"$it\"" } else ""
                     out.append(
                         "  $marker#$i z${c.drawingOrder} ${c.shortClassName()} ${c.screenBox()}" +
                             "${if (c.isVisibleToUser) "" else " invisible"} nodes ${stats.nodes} labels ${stats.labels}" +
-                            " in gap ${stats.inGap}${stats.firstLabels.joinToString("") { " \"$it\"" }}\n",
+                            " in gap ${stats.inGap}$labels\n",
                     )
                 }
             }
@@ -346,6 +377,85 @@ class StatusBarTempService : AccessibilityService() {
             levels++
         }
         return out.toString().trimEnd()
+    }
+
+    /** The status row's container: the closest common ancestor of the battery level and ride time. */
+    private fun rowContainer(
+        battery: AccessibilityNodeInfo,
+        rideTime: AccessibilityNodeInfo?,
+        obtained: MutableList<AccessibilityNodeInfo>,
+    ): AccessibilityNodeInfo? {
+        val batteryAncestors = ancestors(battery, obtained)
+        if (rideTime == null) return batteryAncestors.firstOrNull()
+        return ancestors(rideTime, obtained).firstOrNull { it in batteryAncestors } ?: batteryAncestors.firstOrNull()
+    }
+
+    private fun ancestors(node: AccessibilityNodeInfo, obtained: MutableList<AccessibilityNodeInfo>): List<AccessibilityNodeInfo> {
+        val out = mutableListOf<AccessibilityNodeInfo>()
+        var parent = node.parent
+        while (parent != null && out.size < MAX_DEPTH) {
+            obtained += parent
+            out += parent
+            parent = parent.parent
+        }
+        return out
+    }
+
+    private fun children(node: AccessibilityNodeInfo, obtained: MutableList<AccessibilityNodeInfo>): List<AccessibilityNodeInfo> =
+        (0 until node.childCount).mapNotNull { i -> node.getChild(i)?.also { obtained += it } }
+
+    /**
+     * Collects the visible nodes above [bandBottom] in every layer drawn on top of [row]: the
+     * siblings drawn after it, and after each of its ancestors.
+     */
+    private fun collectLayersAbove(
+        row: AccessibilityNodeInfo,
+        bandBottom: Int,
+        obtained: MutableList<AccessibilityNodeInfo>,
+    ): List<LayerNode> {
+        val out = mutableListOf<LayerNode>()
+        var child = row
+        for (parent in ancestors(row, obtained)) {
+            val siblings = children(parent, obtained)
+            val branch = siblings.indexOf(child)
+            if (branch >= 0) {
+                siblings.forEachIndexed { i, sibling ->
+                    if (i != branch && isDrawnAbove(sibling, i, child, branch)) {
+                        collectBand(sibling, bandBottom, 0, out, obtained)
+                    }
+                }
+            }
+            child = parent
+        }
+        return out
+    }
+
+    /** Whether [node] (child number [index]) is drawn after [other] (child number [otherIndex]). */
+    private fun isDrawnAbove(node: AccessibilityNodeInfo, index: Int, other: AccessibilityNodeInfo, otherIndex: Int): Boolean =
+        if (node.drawingOrder != other.drawingOrder) node.drawingOrder > other.drawingOrder else index > otherIndex
+
+    private fun collectBand(
+        node: AccessibilityNodeInfo,
+        bandBottom: Int,
+        depth: Int,
+        out: MutableList<LayerNode>,
+        obtained: MutableList<AccessibilityNodeInfo>,
+    ) {
+        if (out.size >= MAX_LAYER_NODES || !node.isVisibleToUser) return
+        val box = node.screenBox()
+        // Children lie within their parent's bounds, so nothing below the band can contain it.
+        if (box.top >= bandBottom || box.width <= 0 || box.height <= 0) return
+        val children = children(node, obtained)
+        val label = (node.text ?: node.contentDescription)?.toString()?.takeIf { it.isNotBlank() }
+        out += LayerNode(
+            box = box,
+            label = label,
+            isContent = label != null || node.className?.contains("Image") == true,
+            hasVisibleChildren = children.any { it.isVisibleToUser },
+            depth = depth,
+            className = node.shortClassName(),
+        )
+        children.forEach { collectBand(it, bandBottom, depth + 1, out, obtained) }
     }
 
     private inner class LayerStats {
@@ -468,6 +578,13 @@ class StatusBarTempService : AccessibilityService() {
          * (~51px of ink) still fits, so the size stays the same with and without the icon.
          */
         private const val GAP_DP = 1
+
+        /** Limits for walking the layers on top of the status row (about 20 nodes on a Karoo 3). */
+        private const val MAX_LAYER_NODES = 300
+        private const val MAX_DEPTH = 30
+
+        /** Diagnostics: how many of those nodes to list. */
+        private const val MAX_LAYER_LINES = 12
 
         private const val EVENT_SCAN_DELAY_MS = 100L
         private const val PERIODIC_SCAN_MS = 1000L

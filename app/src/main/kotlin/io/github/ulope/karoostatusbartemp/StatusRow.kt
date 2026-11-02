@@ -21,6 +21,23 @@ data class RowLeaf(
 )
 
 /**
+ * A visible node near the top of the screen in a layer that the ride app draws on top of its
+ * status row, such as a drawer.
+ */
+data class LayerNode(
+    val box: Box,
+    /** The node's text, or its content description if it has no text. */
+    val label: String?,
+    /** Whether the node draws something (text or an image). */
+    val isContent: Boolean,
+    /** Whether it holds visible children, as opposed to an empty container. */
+    val hasVisibleChildren: Boolean,
+    /** How deep it is nested in its layer (for diagnostics). */
+    val depth: Int = 0,
+    val className: String = "",
+)
+
+/**
  * The ride screen's top status row as seen through accessibility.
  *
  * @param leftEdge where the ride time's ink ends. Null if no ride time is shown.
@@ -84,6 +101,30 @@ object StatusRowDetector {
     fun findObstruction(leaves: List<RowLeaf>, anchors: Anchors, area: Box, screenWidth: Int): RowLeaf? =
         leaves.withIndex().firstOrNull { (i, leaf) ->
             i != anchors.rideTimeIndex && i != anchors.batteryIndex && leaf.box.intersects(area) &&
-                (leaf.isContent || leaf.box.width < screenWidth * 0.9f)
+                (leaf.isContent || leaf.box.width < screenWidth * FULL_SIZE)
         }?.value
+
+    /**
+     * Returns the first of [above] (nodes in the layers drawn on top of the status row) that covers
+     * [area], or null if nothing does.
+     *
+     * The Karoo 3 ride screen always has transparent containers the size of the window on top of
+     * the status row (for alerts, drawers and button hints), so those don't count. What does: text
+     * or an image, anything narrower than the window (a dialog, a drawer's handle), and a
+     * full-width node that is shorter than the window and holds something, such as a drawer pulled
+     * all the way up or its header.
+     */
+    fun findCover(above: List<LayerNode>, area: Box, window: Box): LayerNode? =
+        above.firstOrNull { node ->
+            val box = node.box
+            val fullWidth = box.width >= window.width * FULL_SIZE
+            val windowSized = fullWidth && box.height >= window.height * WINDOW_HEIGHT
+            box.intersects(area) && (node.isContent || !fullWidth || (node.hasVisibleChildren && !windowSized))
+        }
+
+    /** Nodes at least this fraction of the window's width count as spanning it. */
+    private const val FULL_SIZE = 0.9f
+
+    /** ... and are as tall as the window from this fraction of its height. */
+    private const val WINDOW_HEIGHT = 0.98f
 }

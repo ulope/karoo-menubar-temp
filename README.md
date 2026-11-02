@@ -118,7 +118,8 @@ new versions can't be installed over old ones.
 - `StatusBarTempService` is the accessibility service. Every second, and whenever windows change,
   it reads the ride app's (`io.hammerhead.rideapp`) window. It picks out the short, labelled
   elements at the top of the screen, takes the end of the ride time and the start of the battery
-  level as the gap, and checks that no other window covers it.
+  level as the gap, and checks that nothing covers it: no other window, and nothing in the layers
+  the ride app draws on top of the status row (where its drawers are).
 - The temperature is drawn in a `TYPE_ACCESSIBILITY_OVERLAY` window, which sits above everything
   and lets touches pass through. Because of this, the "display over other apps" permission isn't
   needed.
