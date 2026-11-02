@@ -1,20 +1,20 @@
 package io.github.ulope.karoostatusbartemp
 
-import android.graphics.Typeface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -30,18 +30,21 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
-
-private val StatusFont = FontFamily(Typeface.create("sans-serif-condensed", Typeface.NORMAL))
 
 /** Temperature shown in the preview while the Karoo has not delivered a reading yet. */
 private const val SAMPLE_CELSIUS = 18.4
@@ -159,50 +162,90 @@ private fun SetupCard(serviceEnabled: Boolean, onOpenAccessibilitySettings: () -
     }
 }
 
-/** A mock of the ride screen's top bar: ride time, temperature, battery level and clock. */
+/**
+ * A scaled-down mock of the ride screen's top bar: ride time, temperature, battery level and
+ * clock. Sizes are fractions of the width, matching the real bar's proportions on a 480px wide
+ * Karoo screen, so everything fits regardless of screen size or system font scale.
+ */
 @Composable
 private fun StatusRowPreview(settings: TempSettings, celsius: Double, imperial: Boolean) {
     val foreground = Color(settings.textColor.argb)
     val background = if (settings.textColor == TextColor.BLACK) Color.White else Color(0xFF1E1E1E)
     val temperature = TemperatureFormat.format(celsius, imperial, settings.showDecimals, settings.showUnit)
+    val font = remember { FontFamily(Font(R.font.roboto_condensed_status)) }
+    val density = LocalDensity.current
+    val screenWidth = with(density) { LocalContext.current.resources.displayMetrics.widthPixels.toDp() }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .aspectRatio(8f)
             .border(1.dp, MaterialTheme.colorScheme.outline)
             .background(background)
             .clipToBounds(),
     ) {
+        val width = maxWidth
+        // Text sizes in dp, so the system font scale can't break the layout.
+        fun size(fractionOfWidth: Float): TextUnit = with(density) { (width * fractionOfWidth).toSp() }
+        val large = size(0.11f)
+        val small = size(0.078f)
+        // Offsets are configured in real screen dp; scale them like the rest of the mock.
+        val scale = width / screenWidth
+
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp),
+                .padding(horizontal = width * 0.02f),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("1:23:45", color = foreground, fontFamily = StatusFont, fontSize = 24.sp)
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            StatusText("1:23:45", large, foreground, font)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center,
+            ) {
                 if (settings.enabled) {
-                    Text(
+                    StatusText(
                         text = temperature,
+                        fontSize = small * (settings.sizePercent / 100f),
                         color = foreground,
-                        fontFamily = StatusFont,
-                        fontSize = (17f * settings.sizePercent / 100f).sp,
-                        modifier = Modifier.offset(x = settings.offsetXDp.dp, y = settings.offsetYDp.dp),
+                        font = font,
+                        modifier = Modifier
+                            .wrapContentWidth(unbounded = true)
+                            .offset(x = settings.offsetXDp.dp * scale, y = settings.offsetYDp.dp * scale),
                     )
                 }
             }
-            Text("87%", color = foreground, fontFamily = StatusFont, fontSize = 17.sp)
+            StatusText("87%", small, foreground, font)
             Box(
                 Modifier
-                    .padding(horizontal = 3.dp)
-                    .size(width = 8.dp, height = 15.dp)
+                    .padding(horizontal = width * 0.01f)
+                    .size(width = width * 0.022f, height = width * 0.045f)
                     .background(foreground, RoundedCornerShape(1.dp)),
             )
-            Spacer(Modifier.width(4.dp))
-            Text("10:42", color = foreground, fontFamily = StatusFont, fontSize = 24.sp)
+            StatusText("10:42", large, foreground, font, Modifier.padding(start = width * 0.01f))
         }
     }
+}
+
+@Composable
+private fun StatusText(
+    text: String,
+    fontSize: TextUnit,
+    color: Color,
+    font: FontFamily,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        color = color,
+        fontFamily = font,
+        fontSize = fontSize,
+        maxLines = 1,
+        softWrap = false,
+        modifier = modifier,
+    )
 }
 
 @Composable

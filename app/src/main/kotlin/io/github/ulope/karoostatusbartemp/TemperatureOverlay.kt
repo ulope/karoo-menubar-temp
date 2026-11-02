@@ -13,17 +13,24 @@ import android.view.View
 import android.view.WindowManager
 import kotlin.math.ceil
 
-/** Paint shared by the overlay and the measurements used to place it. */
-fun statusTextPaint(): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    // Karoo's status bar uses a narrow sans-serif; the condensed system font is the closest match.
-    typeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
+/**
+ * Paint shared by the overlay and the measurements used to place it.
+ *
+ * Karoo's ride screen uses Roboto Condensed, but the system font aliases (such as
+ * "sans-serif-condensed") don't resolve to it on every Karoo, so the app bundles a copy trimmed
+ * to the characters it draws. Anything else falls back to the system font.
+ */
+fun statusTextPaint(context: Context): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    typeface = statusTypeface(context)
 }
+
+fun statusTypeface(context: Context): Typeface = context.resources.getFont(R.font.roboto_condensed_status)
 
 /** Draws a single line of text, sized exactly to the text. */
 @SuppressLint("ViewConstructor")
 class StatusTextView(context: Context) : View(context) {
 
-    private val paint = statusTextPaint()
+    private val paint = statusTextPaint(context)
     private var text = ""
 
     init {

@@ -22,13 +22,14 @@ data class TempSettings(
     /** Text size relative to the native status bar text. */
     val sizePercent: Int = 100,
     val showDecimals: Boolean = false,
-    val showUnit: Boolean = true,
+    /** Off by default: space in the top bar is tight, and the unit follows the Karoo profile. */
+    val showUnit: Boolean = false,
     val textColor: TextColor = TextColor.BLACK,
 ) {
     companion object {
         val OFFSET_X_RANGE = -100..100
         val OFFSET_Y_RANGE = -20..20
-        val SIZE_RANGE = 50..150
+        val SIZE_RANGE = 50..200
     }
 }
 
