@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Status Bar Temp</string>
+    <string name="accessibility_service_label">Status Bar Temp</string>
+    <string name="accessibility_service_description">Shows the current air temperature in the Karoo ride screen\'s top bar, between the ride time and the battery level. The service only reads the position of the ride time and battery in the top bar so it can place the temperature between them, and only while the ride screen is visible. It does not perform any actions, and it does not collect or send any data.</string>
+</resources>
