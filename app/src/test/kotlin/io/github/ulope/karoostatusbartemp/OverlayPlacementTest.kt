@@ -60,11 +60,11 @@ class OverlayPlacementTest {
 
     @Test
     fun `shrinks to fit a narrow gap`() {
-        // 44px gap minus 2 * 4px leaves 36px of ink; at full size the ink is ~40.7px wide.
-        val p = place(leftEdge = 236)
+        // 48px gap minus 2 * 4px leaves 40px of ink; at full size the ink is ~44.6px wide.
+        val p = place(leftEdge = 232)
         assertTrue(p.textSizePx < nativeSize)
-        assertEquals(36f, inkRight(p) - inkLeft(p), 0.5f)
-        assertEquals(258f, (inkLeft(p) + inkRight(p)) / 2f, 1f)
+        assertEquals(40f, inkRight(p) - inkLeft(p), 0.5f)
+        assertEquals(256f, (inkLeft(p) + inkRight(p)) / 2f, 1f)
         assertEquals(nativeBaseline, baseline(p), 1f)
     }
 
@@ -78,23 +78,23 @@ class OverlayPlacementTest {
 
     @Test
     fun `Karoo 3 ride screen from diagnostics`() {
-        // Battery "70%" text [258,7-315,53]: ink starts ~2px in. Digits ~26.5px tall.
+        // Battery "84%" text [258,7-315,53]: ink starts ~3px in. Round digits ~29px tall.
         val battery = Box(258, 7, 315, 53)
         fun karoo(rideTimeInkEnd: Int) = OverlayPlacement.place(
-            StatusRow(leftEdge = rideTimeInkEnd, rightEdge = 260, reference = battery),
-            text, sizePercent = 100, gapPx = 4, offsetXPx = 0, offsetYPx = 0,
+            StatusRow(leftEdge = rideTimeInkEnd, rightEdge = 261, reference = battery),
+            text, sizePercent = 100, gapPx = 2, offsetXPx = 0, offsetYPx = 0,
         )
 
-        // Ride time "0:06:27" node [8,0-169,58], ink ends ~3px in.
-        val wide = karoo(rideTimeInkEnd = 166)
-        assertEquals(37.4f, wide.textSizePx, 0.1f)
-        assertEquals(26.5f, wide.textSizePx * 0.711f, 0.3f)
+        // Ride time "0:00:45" node [8,0-169,58], ink ends ~4px in.
+        val wide = karoo(rideTimeInkEnd = 165)
+        assertEquals(41.1f, wide.textSizePx, 0.1f)
+        assertEquals(29.2f, wide.textSizePx * 0.711f, 0.3f)
         assertEquals(213f, (inkLeft(wide) + inkRight(wide)) / 2f, 1f)
 
-        // With the radar icon the ride time moves to [46,0-207,58]: still full size, ~4.5px free.
-        val narrow = karoo(rideTimeInkEnd = 204)
-        assertEquals(37.4f, narrow.textSizePx, 0.1f)
-        assertTrue(inkLeft(narrow) - 204 >= 4 && 260 - inkRight(narrow) >= 4)
+        // With the radar icon the ride time moves to [46,0-207,58]: the same size, ~3.5px free.
+        val narrow = karoo(rideTimeInkEnd = 203)
+        assertEquals(41.1f, narrow.textSizePx, 0.1f)
+        assertTrue(inkLeft(narrow) - 203 >= 3 && 261 - inkRight(narrow) >= 3)
     }
 
     @Test
