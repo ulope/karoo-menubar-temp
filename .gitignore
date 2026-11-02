@@ -11,3 +11,4 @@
 .cxx/
 *.jks
 *.keystore
+/docs/preview/fonts/

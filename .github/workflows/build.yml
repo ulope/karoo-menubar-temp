@@ -61,20 +61,26 @@ jobs:
       - name: Write Karoo app manifest
         if: env.RELEASE_VERSION != ''
         run: |
-          # The APK name changes with every version, so link to this release's file.
+          # The APK name changes with every version, so link to this release's file. Images come
+          # from docs/ at this release's tag; the Karoo shows them on the extension's info page.
+          docs="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${RELEASE_VERSION}/docs"
           jq -n \
             --arg apk "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_VERSION}/${APK_NAME}" \
             --arg version "${RELEASE_VERSION#v}" \
             --argjson code "$BUILD_NUMBER" \
             --arg developer "github.com/${GITHUB_REPOSITORY_OWNER}" \
+            --arg icon "$docs/icon.png" \
+            --arg screenshot "$docs/screenshot.png" \
             '{
               label: "Status Bar Temp",
               packageName: "io.github.ulope.karoostatusbartemp",
               latestApkUrl: $apk,
               latestVersion: $version,
               latestVersionCode: $code,
+              iconUrl: $icon,
               developer: $developer,
               description: "Shows the current air temperature in the top bar of the ride screen, between the ride time and the battery level.",
+              screenshotUrls: [$screenshot],
               tags: ["weather", "utility"]
             }' > manifest.json
           cat manifest.json
