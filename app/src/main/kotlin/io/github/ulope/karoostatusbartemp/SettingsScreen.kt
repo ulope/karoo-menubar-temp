@@ -138,17 +138,15 @@ fun SettingsScreen(
     }
 }
 
-/** What the service last detected in the ride screen's top row, for reporting placement issues. */
+/** What the service recently saw in the ride screen's top row, for reporting placement issues. */
 @Composable
 private fun DiagnosticsSection() {
     var expanded by remember { mutableStateOf(false) }
-    var shown by remember { mutableStateOf(Diagnostics.lastShown) }
-    var hidden by remember { mutableStateOf(Diagnostics.lastHidden) }
+    var entries by remember { mutableStateOf(Diagnostics.entries()) }
     if (expanded) {
         LaunchedEffect(Unit) {
             while (true) {
-                shown = Diagnostics.lastShown
-                hidden = Diagnostics.lastHidden
+                entries = Diagnostics.entries()
                 delay(1000)
             }
         }
@@ -160,14 +158,19 @@ private fun DiagnosticsSection() {
         }
         if (expanded) {
             Text(
-                "What the app detected in the ride screen's top bar the last time it showed the " +
-                    "temperature. If the placement looks wrong, open a ride, come back here and " +
-                    "take a photo of this together with one of the ride screen.",
+                "The last states of the ride screen's top bar the app saw, newest first, and " +
+                    "whether it showed the temperature. If something looks wrong, reproduce it in " +
+                    "a ride, come back here and take photos of this list together with one of the " +
+                    "ride screen.",
                 style = MaterialTheme.typography.bodySmall,
             )
             val monospace = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-            Text("Shown: " + (shown ?: "not yet since the app started"), style = monospace)
-            hidden?.let { Text("Last " + it, style = monospace) }
+            if (entries.isEmpty()) {
+                Text("Nothing yet since the app started.", style = monospace)
+            }
+            entries.forEachIndexed { i, entry ->
+                Text("${i + 1}. $entry", style = monospace)
+            }
         }
     }
 }

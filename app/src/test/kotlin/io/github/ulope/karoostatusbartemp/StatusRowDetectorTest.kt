@@ -69,17 +69,18 @@ class StatusRowDetectorTest {
 
     @Test
     fun `finds what is in the way`() {
-        val leaves = listOf(rideTime, battery, clock)
+        // The Karoo 3 ride screen always has empty containers spanning the whole screen.
+        val container = RowLeaf(Box(0, 0, 480, 800), label = null, isContent = false)
+        val leaves = listOf(rideTime, battery, clock, container, container)
         val anchors = StatusRowDetector.findAnchors(leaves, screenWidth, maxTop, maxHeight)!!
         val area = Box(210, 15, 250, 50)
-        assertNull(StatusRowDetector.findObstruction(leaves, anchors, area))
+        assertNull(StatusRowDetector.findObstruction(leaves, anchors, area, screenWidth))
 
-        val bell = RowLeaf(Box(225, 10, 255, 45), label = null, isContent = true)
-        val withBell = leaves + bell
-        assertEquals(bell, StatusRowDetector.findObstruction(withBell, anchors, area))
+        val bell = RowLeaf(Box(225, 10, 255, 45), label = "Notifications", isContent = true)
+        assertEquals(bell, StatusRowDetector.findObstruction(leaves + bell, anchors, area, screenWidth))
 
-        // Empty views (spacers, dividers) don't count.
-        val spacer = RowLeaf(Box(200, 0, 260, 60), label = null, isContent = false)
-        assertNull(StatusRowDetector.findObstruction(leaves + spacer, anchors, area))
+        // A drawer's handle or icon without a description counts too.
+        val handle = RowLeaf(Box(200, 4, 280, 12), label = null, isContent = false)
+        assertEquals(handle, StatusRowDetector.findObstruction(leaves + handle, anchors, Box(210, 0, 250, 50), screenWidth))
     }
 }

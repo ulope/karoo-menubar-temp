@@ -16,8 +16,6 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import java.text.DateFormat
-import java.util.Date
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -43,6 +41,7 @@ class StatusBarTempService : AccessibilityService() {
         val anchors: StatusRowDetector.Anchors,
         /** Windows above the ride app that may cover the row, with a description for diagnostics. */
         val windowsAbove: List<Pair<String, Box>>,
+        val screenWidth: Int,
         /** Details for the diagnostics screen. */
         val details: String,
     )
@@ -56,7 +55,6 @@ class StatusBarTempService : AccessibilityService() {
     private var settings = TempSettings()
     private var scan: Scan? = null
     private var scanPending = false
-    private var lastDiagnostics: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -164,25 +162,23 @@ class StatusBarTempService : AccessibilityService() {
             bottom = placement.y + ceil(placement.textSizePx * (metrics.descent - metrics.ascent) / MEASURE_TEXT_SIZE).toInt(),
         )
         val coveringWindow = scan.windowsAbove.firstOrNull { (_, bounds) -> bounds.intersects(area) }
-        val obstruction = StatusRowDetector.findObstruction(scan.leaves, scan.anchors, area)
+        val obstruction = StatusRowDetector.findObstruction(scan.leaves, scan.anchors, area, scan.screenWidth)
         if (coveringWindow != null || obstruction != null) {
-            Diagnostics.lastHidden = "${now()} hidden: " + if (coveringWindow != null) {
+            val reason = if (coveringWindow != null) {
                 "covered by window ${coveringWindow.first} ${coveringWindow.second}"
             } else {
-                "\"${obstruction?.label ?: "(image)"}\" ${obstruction?.box} is in the way"
+                "\"${obstruction?.label ?: "(unlabelled)"}\" ${obstruction?.box} is in the way"
             }
+            Diagnostics.record("HIDDEN: $reason\n${scan.details}")
             overlay.hide()
             return
         }
 
         overlay.show(text, placement, settings.textColor.argb)
-        val diagnostics = scan.details +
-            "\nnative font ${"%.1f".format(OverlayPlacement.nativeFontSize(scan.row))}px, " +
-            "temperature \"$text\" ${"%.1f".format(placement.textSizePx)}px at ${area}"
-        if (diagnostics != lastDiagnostics) {
-            lastDiagnostics = diagnostics
-            Diagnostics.lastShown = "${now()}\n$diagnostics"
-        }
+        Diagnostics.record(
+            "SHOWN \"$text\" ${"%.1f".format(placement.textSizePx)}px at $area " +
+                "(native font ${"%.1f".format(OverlayPlacement.nativeFontSize(scan.row))}px)\n${scan.details}",
+        )
     }
 
     /**
@@ -246,10 +242,22 @@ class StatusBarTempService : AccessibilityService() {
                     .map { (w, r) -> "type ${w.type} \"${w.title ?: ""}\"" to Box(r.left, r.top, r.right, r.bottom) }
 
                 val metrics = resources.displayMetrics
-                val others = leaves.withIndex()
-                    .filter { (i, _) -> i != anchors.batteryIndex && i != anchors.rideTimeIndex }
-                    .take(8)
-                    .joinToString("\n") { (_, l) -> "  \"${l.label ?: if (l.isContent) "(image)" else "(empty)"}\" ${l.box}" }
+                val others = leaves.indices
+                    .filter { it != anchors.batteryIndex && it != anchors.rideTimeIndex }
+                    .take(10)
+                    .joinToString("\n") { i ->
+                        val l = leaves[i]
+                        "  ${nodes[i].shortClassName()} \"${l.label ?: ""}\" ${l.box}"
+                    }
+                // Everything, at any depth, that overlaps the gap: shows what a drawer or dialog
+                // drawn inside the ride app's window is made of.
+                val gap = Box(rideTimeEnd ?: (batteryStart - dp(40)), 0, batteryStart, batteryBox.bottom)
+                val inGap = mutableListOf<String>()
+                collectOverlapping(root, gap, 0, inGap, obtained)
+                val allWindows = windows.sortedByDescending { it.layer }.joinToString("\n") { w ->
+                    val r = Rect().also { w.getBoundsInScreen(it) }
+                    "  type ${w.type} layer ${w.layer} \"${w.title ?: ""}\" [${r.left},${r.top}-${r.right},${r.bottom}]"
+                }
                 val details = buildString {
                     append("app $pkg, screen ${metrics.widthPixels}x${metrics.heightPixels} @${metrics.density}x\n")
                     append("battery \"${battery.label}\" node ${battery.box} text ${batteryText ?: "n/a"} → ink starts at $batteryStart\n")
@@ -260,7 +268,9 @@ class StatusBarTempService : AccessibilityService() {
                             "ride time not found\n"
                         },
                     )
-                    append("other items at the top:\n").append(others.ifEmpty { "  none" })
+                    append("other items at the top:\n").append(others.ifEmpty { "  none" }).append('\n')
+                    append("everything over the gap $gap:\n").append(inGap.joinToString("\n").ifEmpty { "  none" }).append('\n')
+                    append("windows (top first):\n").append(allWindows)
                 }
 
                 return Scan(
@@ -268,6 +278,7 @@ class StatusBarTempService : AccessibilityService() {
                     leaves = leaves,
                     anchors = anchors,
                     windowsAbove = windowsAbove,
+                    screenWidth = screenWidth,
                     details = details,
                 )
             } finally {
@@ -287,6 +298,29 @@ class StatusBarTempService : AccessibilityService() {
      */
     private fun inkInset(box: Box): Int =
         (box.height / OverlayPlacement.REFERENCE_HEIGHT_PER_FONT_SIZE * NATIVE_INK_INSET).roundToInt()
+
+    /** Describes every visible node overlapping [area], for diagnostics (at most 16). */
+    private fun collectOverlapping(
+        node: AccessibilityNodeInfo,
+        area: Box,
+        depth: Int,
+        out: MutableList<String>,
+        obtained: MutableList<AccessibilityNodeInfo>,
+    ) {
+        if (out.size >= 16 || !node.isVisibleToUser) return
+        val box = node.screenBox()
+        if (!box.intersects(area)) return
+        val label = node.text?.toString() ?: node.contentDescription?.toString() ?: ""
+        out += "  ${"·".repeat(depth)}${node.shortClassName()} \"$label\" children ${node.childCount} $box"
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            obtained += child
+            collectOverlapping(child, area, depth + 1, out, obtained)
+        }
+    }
+
+    private fun AccessibilityNodeInfo.shortClassName(): String =
+        className?.toString()?.substringAfterLast('.') ?: "?"
 
     /** Collects visible leaf nodes near the top of the screen. */
     private fun collectTopRowLeaves(
@@ -359,7 +393,6 @@ class StatusBarTempService : AccessibilityService() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 
-    private fun now(): String = DateFormat.getTimeInstance(DateFormat.MEDIUM).format(Date())
 
     companion object {
         private const val TAG = "StatusBarTemp"

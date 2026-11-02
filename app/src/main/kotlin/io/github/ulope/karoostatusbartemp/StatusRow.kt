@@ -76,11 +76,14 @@ object StatusRowDetector {
     }
 
     /**
-     * Returns the first leaf other than the anchors that draws something inside [area], or null if
-     * the area is free. Something there means the status row is covered, e.g. by a drawer.
+     * Returns the first leaf other than the anchors inside [area], or null if the area is free.
+     * Something there means the status row is covered, e.g. by a drawer. Unlabelled leaves count
+     * too (a drawer's handle or icon may have no description), except empty containers spanning
+     * the whole screen, which the Karoo 3 ride screen always has.
      */
-    fun findObstruction(leaves: List<RowLeaf>, anchors: Anchors, area: Box): RowLeaf? =
+    fun findObstruction(leaves: List<RowLeaf>, anchors: Anchors, area: Box, screenWidth: Int): RowLeaf? =
         leaves.withIndex().firstOrNull { (i, leaf) ->
-            i != anchors.rideTimeIndex && i != anchors.batteryIndex && leaf.isContent && leaf.box.intersects(area)
+            i != anchors.rideTimeIndex && i != anchors.batteryIndex && leaf.box.intersects(area) &&
+                (leaf.isContent || leaf.box.width < screenWidth * 0.9f)
         }?.value
 }
