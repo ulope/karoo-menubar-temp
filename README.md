@@ -133,3 +133,15 @@ The status-row approach follows [karoo-phonestatus](https://github.com/alifib/ka
 
 This is an independent project, not affiliated with Hammerhead or SRAM. Karoo OS updates that
 change the ride app's layout may require adjustments.
+
+## License
+
+[MIT](LICENSE). Third-party parts keep their own licenses:
+
+- [karoo-ext](https://github.com/hammerheadnav/karoo-ext), AndroidX, Jetpack Compose, Kotlin and
+  kotlinx libraries: Apache License 2.0.
+- Roboto Condensed (bundled in the app): [SIL Open Font License 1.1](licenses/RobotoCondensed-OFL.txt).
+- The thermometer icon is based on the "thermostat" icon from
+  [Material Icons](https://github.com/google/material-design-icons): Apache License 2.0.
+- The preview images are rendered with Roboto Condensed and IBM Plex Sans Condensed (SIL Open
+  Font License 1.1); the fonts are not included in this repository.
