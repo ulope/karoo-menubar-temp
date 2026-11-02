@@ -11,8 +11,15 @@ import java.util.Date
  */
 object Diagnostics {
 
-    private const val MAX_ENTRIES = 8
+    private const val MAX_ENTRIES = 12
     private val DIGITS = Regex("""\d+""")
+
+    /**
+     * Whether to also record the ride screen's layer structure. Collecting it walks the whole
+     * window, so it is only switched on while the diagnostics are open in the settings screen.
+     */
+    @Volatile
+    var verbose = false
 
     private class Entry(val key: String, val text: String)
 
@@ -29,6 +36,9 @@ object Diagnostics {
         entries.addFirst(Entry(key, "${DateFormat.getTimeInstance(DateFormat.MEDIUM).format(Date())} $text"))
         while (entries.size > MAX_ENTRIES) entries.removeLast()
     }
+
+    @Synchronized
+    fun clear() = entries.clear()
 
     /** The recorded states, newest first. */
     @Synchronized

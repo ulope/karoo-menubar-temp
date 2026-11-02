@@ -118,9 +118,29 @@ class StatusBarTempService : AccessibilityService() {
     private fun rescan() {
         val found = if (settings.enabled) scanRideApp() else null
         if (found?.row != scan?.row) Log.d(TAG, "Status row: ${found?.row}")
+        if (found == null && settings.enabled && Diagnostics.verbose) recordNoStatusRow()
         scan = found
         render()
     }
+
+    /** Diagnostics for when the ride app's status row isn't found (e.g. another app in front). */
+    private fun recordNoStatusRow() {
+        val windows = try {
+            windows
+        } catch (e: RuntimeException) {
+            return
+        }
+        // Not interesting while our own settings screen is in front.
+        val ours = windows.any { w -> w.root?.let { root -> (root.packageName == packageName).also { root.recycleCompat() } } == true }
+        if (ours) return
+        Diagnostics.record("NO STATUS ROW (temperature hidden)\nwindows (top first):\n${describeWindows(windows)}")
+    }
+
+    private fun describeWindows(windows: List<AccessibilityWindowInfo>): String =
+        windows.sortedByDescending { it.layer }.joinToString("\n") { w ->
+            val r = Rect().also { w.getBoundsInScreen(it) }
+            "  type ${w.type} layer ${w.layer} \"${w.title ?: ""}\" [${r.left},${r.top}-${r.right},${r.bottom}]"
+        }
 
     private fun render() {
         val overlay = overlay ?: return
@@ -249,15 +269,11 @@ class StatusBarTempService : AccessibilityService() {
                         val l = leaves[i]
                         "  ${nodes[i].shortClassName()} \"${l.label ?: ""}\" ${l.box}"
                     }
-                // Everything, at any depth, that overlaps the gap: shows what a drawer or dialog
-                // drawn inside the ride app's window is made of.
+                // The layers of the ride screen and what each contains: shows whether something
+                // like a drawer is drawn over the status row inside the ride app's own window.
                 val gap = Box(rideTimeEnd ?: (batteryStart - dp(40)), 0, batteryStart, batteryBox.bottom)
-                val inGap = mutableListOf<String>()
-                collectOverlapping(root, gap, 0, inGap, obtained)
-                val allWindows = windows.sortedByDescending { it.layer }.joinToString("\n") { w ->
-                    val r = Rect().also { w.getBoundsInScreen(it) }
-                    "  type ${w.type} layer ${w.layer} \"${w.title ?: ""}\" [${r.left},${r.top}-${r.right},${r.bottom}]"
-                }
+                val layers = if (Diagnostics.verbose) describeLayers(nodes[anchors.batteryIndex], gap, obtained) else null
+                val allWindows = describeWindows(windows)
                 val details = buildString {
                     append("app $pkg, screen ${metrics.widthPixels}x${metrics.heightPixels} @${metrics.density}x\n")
                     append("battery \"${battery.label}\" node ${battery.box} text ${batteryText ?: "n/a"} → ink starts at $batteryStart\n")
@@ -269,8 +285,8 @@ class StatusBarTempService : AccessibilityService() {
                         },
                     )
                     append("other items at the top:\n").append(others.ifEmpty { "  none" }).append('\n')
-                    append("everything over the gap $gap:\n").append(inGap.joinToString("\n").ifEmpty { "  none" }).append('\n')
                     append("windows (top first):\n").append(allWindows)
+                    if (layers != null) append("\nlayers around the battery level (gap $gap):\n").append(layers)
                 }
 
                 return Scan(
@@ -299,25 +315,65 @@ class StatusBarTempService : AccessibilityService() {
     private fun inkInset(box: Box): Int =
         (box.height / OverlayPlacement.REFERENCE_HEIGHT_PER_FONT_SIZE * NATIVE_INK_INSET).roundToInt()
 
-    /** Describes every visible node overlapping [area], for diagnostics (at most 16). */
-    private fun collectOverlapping(
-        node: AccessibilityNodeInfo,
-        area: Box,
-        depth: Int,
-        out: MutableList<String>,
-        obtained: MutableList<AccessibilityNodeInfo>,
-    ) {
-        if (out.size >= 16 || !node.isVisibleToUser) return
-        val box = node.screenBox()
-        if (!box.intersects(area)) return
-        val label = node.text?.toString() ?: node.contentDescription?.toString() ?: ""
-        out += "  ${"·".repeat(depth)}${node.shortClassName()} \"$label\" children ${node.childCount} $box"
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            obtained += child
-            collectOverlapping(child, area, depth + 1, out, obtained)
+    /**
+     * For diagnostics: walks up from [anchor] and, at every level with siblings, describes each
+     * sibling layer: index (later ones are drawn on top), drawing order, bounds, how many visible
+     * nodes and labels it contains, how many of them overlap [gap], and its first labels.
+     */
+    private fun describeLayers(anchor: AccessibilityNodeInfo, gap: Box, obtained: MutableList<AccessibilityNodeInfo>): String {
+        val out = StringBuilder()
+        var child = anchor
+        var parent = anchor.parent?.also { obtained += it }
+        var levels = 0
+        while (parent != null && levels < 20) {
+            if (parent.childCount > 1) {
+                out.append("  ${parent.shortClassName()} ${parent.screenBox()}:\n")
+                for (i in 0 until parent.childCount) {
+                    val c = parent.getChild(i) ?: continue
+                    obtained += c
+                    val stats = LayerStats()
+                    stats.collect(c, gap, obtained)
+                    val marker = if (c == child) ">" else " "
+                    out.append(
+                        "  $marker#$i z${c.drawingOrder} ${c.shortClassName()} ${c.screenBox()}" +
+                            "${if (c.isVisibleToUser) "" else " invisible"} nodes ${stats.nodes} labels ${stats.labels}" +
+                            " in gap ${stats.inGap}${stats.firstLabels.joinToString("") { " \"$it\"" }}\n",
+                    )
+                }
+            }
+            child = parent
+            parent = parent.parent?.also { obtained += it }
+            levels++
+        }
+        return out.toString().trimEnd()
+    }
+
+    private inner class LayerStats {
+        var nodes = 0
+        var labels = 0
+        var inGap = 0
+        val firstLabels = mutableListOf<String>()
+
+        fun collect(node: AccessibilityNodeInfo, gap: Box, obtained: MutableList<AccessibilityNodeInfo>) {
+            if (nodes >= 300 || !node.isVisibleToUser) return
+            nodes++
+            val label = (node.text ?: node.contentDescription)?.toString()?.takeIf { it.isNotBlank() }
+            if (label != null) {
+                labels++
+                if (firstLabels.size < 2) firstLabels += label.take(14)
+            }
+            val box = node.screenBox()
+            // Containers spanning the whole screen overlap everything; count only real content.
+            if (box.intersects(gap) && (label != null || box.width < screenWidthPx * 0.9f)) inGap++
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                obtained += child
+                collect(child, gap, obtained)
+            }
         }
     }
+
+    private val screenWidthPx: Int get() = resources.displayMetrics.widthPixels
 
     private fun AccessibilityNodeInfo.shortClassName(): String =
         className?.toString()?.substringAfterLast('.') ?: "?"
