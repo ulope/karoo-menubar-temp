@@ -141,7 +141,7 @@ fun SettingsScreen(
 /** What the service recently saw in the ride screen's top row, for reporting placement issues. */
 @Composable
 private fun DiagnosticsSection() {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(Diagnostics.verbose) }
     var entries by remember { mutableStateOf(Diagnostics.entries()) }
     if (expanded) {
         LaunchedEffect(Unit) {
@@ -153,15 +153,27 @@ private fun DiagnosticsSection() {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        TextButton(onClick = { expanded = !expanded }) {
-            Text(if (expanded) "Hide diagnostics" else "Show diagnostics")
+        Row {
+            TextButton(onClick = {
+                expanded = !expanded
+                // Detailed recording stays on while the diagnostics are open, also during a ride.
+                Diagnostics.verbose = expanded
+            }) {
+                Text(if (expanded) "Hide diagnostics" else "Show diagnostics")
+            }
+            if (expanded) {
+                TextButton(onClick = {
+                    Diagnostics.clear()
+                    entries = emptyList()
+                }) { Text("Clear") }
+            }
         }
         if (expanded) {
             Text(
                 "The last states of the ride screen's top bar the app saw, newest first, and " +
-                    "whether it showed the temperature. If something looks wrong, reproduce it in " +
-                    "a ride, come back here and take photos of this list together with one of the " +
-                    "ride screen.",
+                    "whether it showed the temperature. While this is open, the app also records " +
+                    "the ride screen's layers. To report a problem: tap Clear, reproduce it in a " +
+                    "ride, come back here and take photos of this list.",
                 style = MaterialTheme.typography.bodySmall,
             )
             val monospace = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp)
