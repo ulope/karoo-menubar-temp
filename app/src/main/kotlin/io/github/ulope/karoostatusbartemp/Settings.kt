@@ -78,7 +78,8 @@ class SettingsStore(context: Context) {
         const val KEY_ENABLED = "enabled"
         const val KEY_OFFSET_X = "offset_x_dp"
         const val KEY_OFFSET_Y = "offset_y_dp"
-        const val KEY_SIZE = "size_percent"
+        // Renamed when 100% changed to mean "same size as the battery level", so old values reset.
+        const val KEY_SIZE = "size_percent_of_battery_text"
         const val KEY_DECIMALS = "show_decimals"
         const val KEY_UNIT = "show_unit"
         const val KEY_COLOR = "text_color"

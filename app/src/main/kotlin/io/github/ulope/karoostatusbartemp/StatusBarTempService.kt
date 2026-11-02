@@ -16,8 +16,11 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import java.text.DateFormat
+import java.util.Date
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -29,9 +32,21 @@ import kotlin.math.roundToInt
  *  1. reads the ride app's window through accessibility to find where the ride time ends and the
  *     battery level starts, and whether the row is on screen at all (it is not on menus, the
  *     launcher or other apps), and
- *  2. draws the temperature in that gap with an accessibility overlay window.
+ *  2. draws the temperature in that gap with an accessibility overlay window, at the battery
+ *     level's size and baseline.
  */
 class StatusBarTempService : AccessibilityService() {
+
+    /** The result of reading the ride app's window. */
+    private data class Scan(
+        val row: StatusRow,
+        val leaves: List<RowLeaf>,
+        val anchors: StatusRowDetector.Anchors,
+        /** Windows above the ride app that may cover the row, with a description for diagnostics. */
+        val windowsAbove: List<Pair<String, Box>>,
+        /** Details for the diagnostics screen. */
+        val details: String,
+    )
 
     private val handler = Handler(Looper.getMainLooper())
     private var scope: CoroutineScope? = null
@@ -40,8 +55,9 @@ class StatusBarTempService : AccessibilityService() {
     private val measurePaint by lazy { statusTextPaint(this).apply { textSize = MEASURE_TEXT_SIZE } }
 
     private var settings = TempSettings()
-    private var row: StatusRow? = null
+    private var scan: Scan? = null
     private var scanPending = false
+    private var lastDiagnostics: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -103,17 +119,17 @@ class StatusBarTempService : AccessibilityService() {
     }
 
     private fun rescan() {
-        val found = if (settings.enabled) findRideStatusRow() else null
-        if (found != row) Log.d(TAG, "Status row: $found")
-        row = found
+        val found = if (settings.enabled) scanRideApp() else null
+        if (found?.row != scan?.row) Log.d(TAG, "Status row: ${found?.row}")
+        scan = found
         render()
     }
 
     private fun render() {
         val overlay = overlay ?: return
         val temperature = temperature ?: return
-        val row = row
-        if (!settings.enabled || row == null) {
+        val scan = scan
+        if (!settings.enabled || scan == null) {
             overlay.hide()
             return
         }
@@ -125,23 +141,52 @@ class StatusBarTempService : AccessibilityService() {
             showUnit = settings.showUnit,
         )
         val metrics = measurePaint.fontMetrics
+        val widthPerPx = measurePaint.measureText(text) / MEASURE_TEXT_SIZE
         val placement = OverlayPlacement.place(
-            row = row,
-            widthPerPx = measurePaint.measureText(text) / MEASURE_TEXT_SIZE,
-            heightPerPx = (metrics.descent - metrics.ascent) / MEASURE_TEXT_SIZE,
+            row = scan.row,
+            widthPerPx = widthPerPx,
+            ascentPerPx = -metrics.ascent / MEASURE_TEXT_SIZE,
             sizePercent = settings.sizePercent,
             gapPx = dp(GAP_DP),
             offsetXPx = dp(settings.offsetXDp),
             offsetYPx = dp(settings.offsetYDp),
         )
+
+        // Hide if something else is where the text would go: a drawer pulled over the ride
+        // screen, a dialog, the control center.
+        val area = Box(
+            left = placement.x,
+            top = placement.y,
+            right = placement.x + ceil(placement.textSizePx * widthPerPx).toInt(),
+            bottom = placement.y + ceil(placement.textSizePx * (metrics.descent - metrics.ascent) / MEASURE_TEXT_SIZE).toInt(),
+        )
+        val coveringWindow = scan.windowsAbove.firstOrNull { (_, bounds) -> bounds.intersects(area) }
+        val obstruction = StatusRowDetector.findObstruction(scan.leaves, scan.anchors, area)
+        if (coveringWindow != null || obstruction != null) {
+            Diagnostics.lastHidden = "${now()} hidden: " + if (coveringWindow != null) {
+                "covered by window ${coveringWindow.first} ${coveringWindow.second}"
+            } else {
+                "\"${obstruction?.label ?: "(image)"}\" ${obstruction?.box} is in the way"
+            }
+            overlay.hide()
+            return
+        }
+
         overlay.show(text, placement, settings.textColor.argb)
+        val diagnostics = scan.details +
+            "\nnative font ${"%.1f".format(OverlayPlacement.nativeFontSize(scan.row))}px, " +
+            "temperature \"$text\" ${"%.1f".format(placement.textSizePx)}px at ${area}"
+        if (diagnostics != lastDiagnostics) {
+            lastDiagnostics = diagnostics
+            Diagnostics.lastShown = "${now()}\n$diagnostics"
+        }
     }
 
     /**
-     * Finds the ride app's top status row, or returns null if it is not visible (ride app not in
-     * front, or the row covered by another window such as the control center or a dialog).
+     * Reads the ride app's top status row, or returns null if it is not on screen (ride app not
+     * in front, or not showing the row).
      */
-    private fun findRideStatusRow(): StatusRow? {
+    private fun scanRideApp(): Scan? {
         val windows = try {
             windows
         } catch (e: RuntimeException) {
@@ -157,22 +202,65 @@ class StatusBarTempService : AccessibilityService() {
             val root = window.root ?: continue
             val obtained = mutableListOf(root)
             try {
-                if (root.packageName?.toString()?.startsWith(RIDE_APP_PACKAGE_PREFIX) != true) continue
+                val pkg = root.packageName?.toString()
+                if (pkg?.startsWith(RIDE_APP_PACKAGE_PREFIX) != true) continue
 
-                val leaves = mutableListOf<AccessibilityNodeInfo>()
-                collectTopRowLeaves(root, maxTopPx, leaves, obtained)
-                val boxes = leaves.map { it.screenBox() }
+                val nodes = mutableListOf<AccessibilityNodeInfo>()
+                collectTopRowLeaves(root, maxTopPx, nodes, obtained)
+                val leaves = nodes.map { node ->
+                    val label = node.text?.toString()?.takeIf { it.isNotBlank() }
+                        ?: node.contentDescription?.toString()?.takeIf { it.isNotBlank() }
+                    RowLeaf(
+                        box = node.screenBox(),
+                        label = label,
+                        isContent = label != null || node.className?.contains("Image") == true,
+                    )
+                }
                 val windowBounds = Rect().also { window.getBoundsInScreen(it) }
                 val screenWidth = maxOf(resources.displayMetrics.widthPixels, windowBounds.right)
-                val anchors = StatusRowDetector.findAnchors(boxes, screenWidth, maxTopPx, maxHeightPx)
+                val anchors = StatusRowDetector.findAnchors(leaves, screenWidth, maxTopPx, maxHeightPx)
                     ?: continue
 
-                val rightNodeBox = boxes[anchors.rightIndex]
-                val rightBox = textBounds(leaves[anchors.rightIndex], rightNodeBox) ?: rightNodeBox
-                val leftBox = anchors.leftIndex?.let { textBounds(leaves[it], boxes[it]) ?: boxes[it] }
-                val row = StatusRow(leftEdge = leftBox?.right, rightEdge = rightBox.left, reference = rightBox)
+                val battery = leaves[anchors.batteryIndex]
+                val batteryText = textBounds(nodes[anchors.batteryIndex], battery.box)
+                val batteryBox = batteryText ?: battery.box
 
-                return if (isCovered(row, window, windows, maxHeightPx)) null else row
+                val rideTime = anchors.rideTimeIndex?.let { leaves[it] }
+                val rideTimeText = anchors.rideTimeIndex?.let { textBounds(nodes[it], leaves[it].box) }
+                val rideTimeEnd = rideTime?.let { rideTimeText?.right ?: estimateTextEnd(it) }
+
+                val windowsAbove = windows
+                    .filter { it.layer > window.layer && it.type != AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY }
+                    .map { it to Rect().also { r -> it.getBoundsInScreen(r) } }
+                    // Thin system bars along the edge don't cover the ride app's status row.
+                    .filterNot { (w, r) -> w.type == AccessibilityWindowInfo.TYPE_SYSTEM && r.height() <= maxHeightPx }
+                    .map { (w, r) -> "type ${w.type} \"${w.title ?: ""}\"" to Box(r.left, r.top, r.right, r.bottom) }
+
+                val metrics = resources.displayMetrics
+                val others = leaves.withIndex()
+                    .filter { (i, _) -> i != anchors.batteryIndex && i != anchors.rideTimeIndex }
+                    .take(8)
+                    .joinToString("\n") { (_, l) -> "  \"${l.label ?: if (l.isContent) "(image)" else "(empty)"}\" ${l.box}" }
+                val details = buildString {
+                    append("app $pkg, screen ${metrics.widthPixels}x${metrics.heightPixels} @${metrics.density}x\n")
+                    append("battery \"${battery.label}\" node ${battery.box} text ${batteryText ?: "n/a"}\n")
+                    append(
+                        if (rideTime != null) {
+                            "ride time \"${rideTime.label}\" node ${rideTime.box} text ${rideTimeText ?: "n/a"} → ends at $rideTimeEnd\n"
+                        } else {
+                            "ride time not found\n"
+                        },
+                    )
+                    append("other items at the top:\n").append(others.ifEmpty { "  none" })
+                }
+
+                return Scan(
+                    row = StatusRow(leftEdge = rideTimeEnd, rightEdge = batteryBox.left, reference = batteryBox),
+                    leaves = leaves,
+                    anchors = anchors,
+                    windowsAbove = windowsAbove,
+                    details = details,
+                )
             } finally {
                 obtained.forEach { it.recycleCompat() }
             }
@@ -180,7 +268,19 @@ class StatusBarTempService : AccessibilityService() {
         return null
     }
 
-    /** Collects labelled, visible leaf nodes near the top of the screen. */
+    /**
+     * Where the ride time text ends when the app doesn't report character bounds: measure the
+     * text in the same font, sized like the battery level relative to its node. Only ever moves
+     * the end left of the node's edge, in case the node is wider than its text.
+     */
+    private fun estimateTextEnd(leaf: RowLeaf): Int {
+        val text = leaf.label ?: return leaf.box.right
+        val fontSize = leaf.box.height / OverlayPlacement.REFERENCE_HEIGHT_PER_FONT_SIZE
+        val width = measurePaint.measureText(text) / MEASURE_TEXT_SIZE * fontSize
+        return min(leaf.box.right, leaf.box.left + width.roundToInt())
+    }
+
+    /** Collects visible leaf nodes near the top of the screen. */
     private fun collectTopRowLeaves(
         node: AccessibilityNodeInfo,
         maxTopPx: Int,
@@ -192,41 +292,13 @@ class StatusBarTempService : AccessibilityService() {
         if (node.screenBox().top > maxTopPx) return
 
         if (node.childCount == 0) {
-            if (!node.text.isNullOrEmpty() || !node.contentDescription.isNullOrEmpty()) leaves += node
+            leaves += node
             return
         }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             obtained += child
             collectTopRowLeaves(child, maxTopPx, leaves, obtained)
-        }
-    }
-
-    /**
-     * True if a window above the ride app covers the spot where the temperature would be drawn,
-     * e.g. the control center, a notification or a dialog. Thin system bars and other
-     * accessibility overlays are ignored.
-     */
-    private fun isCovered(
-        row: StatusRow,
-        rideWindow: AccessibilityWindowInfo,
-        windows: List<AccessibilityWindowInfo>,
-        maxHeightPx: Int,
-    ): Boolean {
-        val gap = Rect(
-            row.leftEdge ?: (row.rightEdge - dp(GAP_DP)),
-            row.reference.top,
-            row.rightEdge,
-            row.reference.bottom,
-        )
-        return windows.any { window ->
-            if (window.layer <= rideWindow.layer) return@any false
-            if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@any false
-            val bounds = Rect().also { window.getBoundsInScreen(it) }
-            if (window.type == AccessibilityWindowInfo.TYPE_SYSTEM && bounds.height() <= maxHeightPx) {
-                return@any false
-            }
-            Rect.intersects(bounds, gap)
         }
     }
 
@@ -278,6 +350,8 @@ class StatusBarTempService : AccessibilityService() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
+
+    private fun now(): String = DateFormat.getTimeInstance(DateFormat.MEDIUM).format(Date())
 
     companion object {
         private const val TAG = "StatusBarTemp"

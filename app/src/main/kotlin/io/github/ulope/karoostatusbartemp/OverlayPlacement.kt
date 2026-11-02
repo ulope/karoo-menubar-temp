@@ -9,11 +9,16 @@ data class Placement(val x: Int, val y: Int, val textSizePx: Float)
 object OverlayPlacement {
 
     /**
-     * Ratio between our text size and the height of the reference element (the battery
-     * percentage). Text views are a little taller than their font size because of ascent and
-     * descent, so this yields roughly the same digit height as the native text.
+     * Height of the battery level's text bounds divided by its font size. Measured on a Karoo 3:
+     * the bounds are the text's line box, a little taller than the font size.
      */
-    const val AUTO_SIZE_FACTOR = 0.78f
+    const val REFERENCE_HEIGHT_PER_FONT_SIZE = 1.12f
+
+    /**
+     * Where the battery level's baseline sits within its text bounds, as a fraction of their height
+     * from the top. Measured on a Karoo 3.
+     */
+    const val BASELINE_RATIO = 0.865f
 
     /**
      * If the gap is too narrow, the text may shrink down to this fraction of its normal size.
@@ -21,11 +26,14 @@ object OverlayPlacement {
      */
     const val MIN_SHRINK = 0.85f
 
+    /** Font size of the native battery level text, in px. */
+    fun nativeFontSize(row: StatusRow): Float = row.reference.height / REFERENCE_HEIGHT_PER_FONT_SIZE
+
     /**
      * @param row the detected status row
      * @param widthPerPx rendered text width divided by text size (text width at 1px)
-     * @param heightPerPx rendered line height divided by text size
-     * @param sizePercent user size adjustment, 100 = match native text
+     * @param ascentPerPx distance from the top of our text view to its baseline, per px of text size
+     * @param sizePercent user size adjustment, 100 = same size as the battery level
      * @param gapPx minimum free space to keep next to the ride time and battery text
      * @param offsetXPx user horizontal adjustment (positive = right)
      * @param offsetYPx user vertical adjustment (positive = down)
@@ -33,13 +41,13 @@ object OverlayPlacement {
     fun place(
         row: StatusRow,
         widthPerPx: Float,
-        heightPerPx: Float,
+        ascentPerPx: Float,
         sizePercent: Int,
         gapPx: Int,
         offsetXPx: Int,
         offsetYPx: Int,
     ): Placement {
-        val baseSize = row.reference.height * AUTO_SIZE_FACTOR * sizePercent / 100f
+        val baseSize = nativeFontSize(row) * sizePercent / 100f
         var size = baseSize
 
         val x: Float
@@ -56,7 +64,9 @@ object OverlayPlacement {
             x = row.rightEdge - gapPx - size * widthPerPx
         }
 
-        val y = row.reference.centerY - size * heightPerPx / 2f
+        // Share the battery level's baseline.
+        val baseline = row.reference.top + row.reference.height * BASELINE_RATIO
+        val y = baseline - size * ascentPerPx
         return Placement(
             x = x.roundToInt() + offsetXPx,
             y = y.roundToInt() + offsetYPx,

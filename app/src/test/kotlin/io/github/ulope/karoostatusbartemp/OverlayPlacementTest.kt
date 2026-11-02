@@ -6,9 +6,12 @@ import org.junit.Test
 
 class OverlayPlacementTest {
 
-    private val reference = Box(left = 280, top = 10, right = 340, bottom = 50) // height 40
-    private val widthPerPx = 1.5f
-    private val heightPerPx = 1.2f
+    // Battery level text bounds, 40px tall: native font size 40 / 1.12 ≈ 35.7px.
+    private val reference = Box(left = 280, top = 10, right = 340, bottom = 50)
+    private val nativeSize = 40 / OverlayPlacement.REFERENCE_HEIGHT_PER_FONT_SIZE
+    private val nativeBaseline = 10 + 40 * OverlayPlacement.BASELINE_RATIO
+    private val widthPerPx = 1.36f // "18°" in Roboto Condensed
+    private val ascentPerPx = 0.928f
 
     private fun place(
         leftEdge: Int?,
@@ -19,61 +22,62 @@ class OverlayPlacementTest {
     ) = OverlayPlacement.place(
         row = StatusRow(leftEdge, rightEdge, reference),
         widthPerPx = widthPerPx,
-        heightPerPx = heightPerPx,
+        ascentPerPx = ascentPerPx,
         sizePercent = sizePercent,
-        gapPx = 8,
+        gapPx = 4,
         offsetXPx = offsetX,
         offsetYPx = offsetY,
     )
 
+    private fun baseline(p: Placement) = p.y + p.textSizePx * ascentPerPx
+
     @Test
-    fun `text size follows the reference height`() {
-        assertEquals(40 * OverlayPlacement.AUTO_SIZE_FACTOR, place(leftEdge = 160).textSizePx, 0.01f)
-        assertEquals(40 * OverlayPlacement.AUTO_SIZE_FACTOR * 1.5f, place(160, sizePercent = 150).textSizePx, 0.01f)
+    fun `100 percent matches the battery level's font size`() {
+        assertEquals(nativeSize, place(leftEdge = 150).textSizePx, 0.01f)
+        assertEquals(nativeSize * 1.5f, place(150, sizePercent = 150).textSizePx, 0.01f)
+    }
+
+    @Test
+    fun `shares the battery level's baseline at any size`() {
+        assertEquals(nativeBaseline, baseline(place(leftEdge = 150)), 1f)
+        assertEquals(nativeBaseline, baseline(place(leftEdge = 150, sizePercent = 70)), 1f)
+        assertEquals(nativeBaseline, baseline(place(leftEdge = 150, sizePercent = 130)), 1f)
     }
 
     @Test
     fun `centers the text in the gap`() {
-        val p = place(leftEdge = 160)
-        val width = p.textSizePx * widthPerPx
-        assertEquals(220f, p.x + width / 2f, 1f)
+        val p = place(leftEdge = 150)
+        assertEquals(215f, p.x + p.textSizePx * widthPerPx / 2f, 1f)
     }
 
     @Test
-    fun `centers the text vertically on the reference`() {
-        val p = place(leftEdge = 160)
-        val height = p.textSizePx * heightPerPx
-        assertEquals(30f, p.y + height / 2f, 1f)
-    }
-
-    @Test
-    fun `sits left of the battery when there is no ride time`() {
+    fun `sits left of the battery level when there is no ride time`() {
         val p = place(leftEdge = null)
-        val width = p.textSizePx * widthPerPx
-        assertEquals(280f - 8f, p.x + width, 1f)
+        assertEquals(280f - 4f, p.x + p.textSizePx * widthPerPx, 1f)
     }
 
     @Test
     fun `shrinks to fit a narrow gap`() {
-        // 60px gap minus 2 * 8px padding leaves 44px; the normal width would be ~47px.
-        val p = place(leftEdge = 220)
-        assertTrue(p.textSizePx < 40 * OverlayPlacement.AUTO_SIZE_FACTOR)
-        assertEquals(44f, p.textSizePx * widthPerPx, 0.01f)
-        assertEquals(250f, p.x + p.textSizePx * widthPerPx / 2f, 1f)
+        // 54px gap minus 2 * 4px leaves 46px; at full size the text is ~48.6px wide.
+        val p = place(leftEdge = 226)
+        assertTrue(p.textSizePx < nativeSize)
+        assertEquals(46f, p.textSizePx * widthPerPx, 0.01f)
+        assertEquals(253f, p.x + p.textSizePx * widthPerPx / 2f, 1f)
+        assertEquals(nativeBaseline, baseline(p), 1f)
     }
 
     @Test
     fun `never shrinks below the minimum`() {
-        val minimum = 40 * OverlayPlacement.AUTO_SIZE_FACTOR * OverlayPlacement.MIN_SHRINK
-        assertEquals(minimum, place(leftEdge = 240).textSizePx, 0.01f)
+        val minimum = nativeSize * OverlayPlacement.MIN_SHRINK
+        assertEquals(minimum, place(leftEdge = 250).textSizePx, 0.01f)
         // Gap narrower than the padding.
-        assertEquals(minimum, place(leftEdge = 275).textSizePx, 0.01f)
+        assertEquals(minimum, place(leftEdge = 277).textSizePx, 0.01f)
     }
 
     @Test
     fun `applies user offsets`() {
-        val base = place(leftEdge = 160)
-        val moved = place(leftEdge = 160, offsetX = 12, offsetY = -3)
+        val base = place(leftEdge = 150)
+        val moved = place(leftEdge = 150, offsetX = 12, offsetY = -3)
         assertEquals(base.x + 12, moved.x)
         assertEquals(base.y - 3, moved.y)
     }

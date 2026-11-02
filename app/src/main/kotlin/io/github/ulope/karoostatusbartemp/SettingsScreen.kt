@@ -30,7 +30,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -44,6 +48,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /** Temperature shown in the preview while the Karoo has not delivered a reading yet. */
@@ -127,6 +132,42 @@ fun SettingsScreen(
                 }) { Text("Reset position") }
                 Button(onClick = onClose) { Text("Done") }
             }
+
+            DiagnosticsSection()
+        }
+    }
+}
+
+/** What the service last detected in the ride screen's top row, for reporting placement issues. */
+@Composable
+private fun DiagnosticsSection() {
+    var expanded by remember { mutableStateOf(false) }
+    var shown by remember { mutableStateOf(Diagnostics.lastShown) }
+    var hidden by remember { mutableStateOf(Diagnostics.lastHidden) }
+    if (expanded) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                shown = Diagnostics.lastShown
+                hidden = Diagnostics.lastHidden
+                delay(1000)
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(if (expanded) "Hide diagnostics" else "Show diagnostics")
+        }
+        if (expanded) {
+            Text(
+                "What the app detected in the ride screen's top bar the last time it showed the " +
+                    "temperature. If the placement looks wrong, open a ride, come back here and " +
+                    "take a photo of this together with one of the ride screen.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            val monospace = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            Text("Shown: " + (shown ?: "not yet since the app started"), style = monospace)
+            hidden?.let { Text("Last " + it, style = monospace) }
         }
     }
 }
